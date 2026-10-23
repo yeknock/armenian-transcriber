@@ -1,0 +1,27 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
+
+# Model weights — never commit (brief)
+models/
+*.nemo
+*.onnx
+*.bin
+*.safetensors
+*.pt
+*.ckpt
+
+# Audio recordings — never commit (brief); reference transcripts in eval/refs/ ARE committed
+*.wav
+*.mp3
+*.m4a
+*.flac
+*.ogg
+eval/audio/
+
+# Secrets
+.env

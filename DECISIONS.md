@@ -9,6 +9,11 @@ MacBook Air M1, 8 GB unified memory, fanless. Wired headphones. Call app for the
 interview unknown → audio routing must work with any app.
 **Consequence:** all models together must fit in ~3–3.5 GB; prefer small, single-pass models.
 
+## D0a — Python environment: system Python 3.12.3 + `venv` + `requirements.txt` (2026-10-23) — Decided
+**Why:** already installed; every chosen library supports 3.12; built-in `venv` means no extra
+tool to install or explain. `uv` rejected only because it adds a tool we don't need.
+Repo: https://github.com/yeknock/armenian-transcriber
+
 ## D1 — ASR model: `nvidia/stt_hy_fastconformer_hybrid_large_pc` (2026-10-23) — Decided
 **Why:** Best open model on ArmBench-ASR across all metrics (WER, CER, normalised variants).
 Clearly best on domains it was not trained on:
