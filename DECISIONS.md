@@ -5,7 +5,10 @@ Status: **Decided** · **Tentative** (chosen, to be confirmed by measurement) ·
 ---
 
 ## D0 — Hardware and environment facts (2026-10-23) — Decided
-MacBook Air M1, 8 GB unified memory, fanless. Wired headphones. Call app for the
+MacBook Air M1, 8 GB unified memory, fanless. Development audio: MacBook Air mic + built-in speakers.
+Bluetooth earbuds set aside (their mic switches them to headset mode and can break the Multi-Output
+group). Speakers cause echo (call audio picked up by the mic, may show as `Me`); echo handling is out
+of scope — measure it (TESTS.md E6), then choose speakers vs headphones for the interview. Call app for the
 interview unknown → audio routing must work with any app.
 **Consequence:** all models together must fit in ~3–3.5 GB; prefer small, single-pass models.
 
@@ -67,3 +70,17 @@ Decide in M4.
 VAD → (speaker) → ASR → MT, one shared worker. Streaming ASR rejected: much more complex
 and not needed when the deadline is 5 s after the phrase ends. Joint speech-to-translation
 model rejected: no light enough option for Armenian on 8 GB, and less modular.
+
+## D6 — Module split and contracts (2026-10-24) — Decided
+Flat package `transcriber/`, one file per module (audio, vad, asr, mt, speakers) plus `pipeline.py`,
+`output.py`; `main.py` is the CLI. Shared types in `transcriber/contracts.py`; each module's interface is
+written in its file before it is built. Each module is built in its own chat from `briefs/<module>.md`.
+Rules (MODULES.md): modules import only `contracts`; only `pipeline.py` wires them; the VAD `Segmenter` is
+push-based with no threads or clock reads, so WAV-file tests behave exactly like live audio; only
+`AudioCapture` may own a thread.
+**Why:** Tip 3 — each module can be tested alone with WAV files or text; chats touch different files, so
+they can run in parallel without conflicts.
+**Rejected:** one sub-package per module (earlier PLAN §4 draft) — more files, no benefit at this size;
+a Git branch per module — all chats share one working folder, so switching branches would change files
+under another chat. Shared-types file is not named `types.py`: it would hide Python's built-in `types`
+module when a script runs from inside the package.

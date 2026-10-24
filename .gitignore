@@ -25,3 +25,6 @@ eval/audio/
 
 # Secrets
 .env
+
+# Run logs (latency.csv etc.)
+logs/

@@ -25,7 +25,7 @@ saving transcripts, non-Armenian input.
 
 - **Hardware:** MacBook Air **M1, 8 GB** unified memory, fanless (throttles under sustained load).
 - **Memory budget:** all models together ≤ ~3–3.5 GB (macOS + call app use the rest).
-- **Audio:** wired headphones; BlackHole 2ch + Multi-Output Device; call app unknown → setup must work for any app.
+- **Audio:** development on the MacBook Air mic + built-in speakers (echo out of scope); BlackHole 2ch + Multi-Output Device "Call Output"; call app unknown → setup must work for any app.
 - **Time:** ~20 h total, deadline one week from the brief (Oct 21, 2026).
 - **Repo:** never commit model weights, audio recordings or keys.
 
@@ -40,7 +40,7 @@ BlackHole ──► Capture ─► VAD segmenter ─► Speaker identifier ─�
 Threads: 2 audio callbacks (copy only) · 2 segmenter threads · 1 worker (ASR + MT) · main thread (printer, Ctrl+C).
 Models are loaded once at start-up.
 
-**Core data object**
+**Core data object** (authoritative version: `transcriber/contracts.py`)
 
 ```python
 @dataclass
@@ -56,26 +56,14 @@ class Segment:
 
 ## 4. Modules — inputs and outputs
 
-| Module | Input | Output | Notes |
-|---|---|---|---|
-| `audio/devices.py` | — | device list; validated device ids | Fails loudly on a wrong id |
-| `audio/capture.py` | device id | queue of 16 kHz mono float32 frames (512 samples) + timestamps | Callback only copies; resampling in its own thread |
-| `vad/segmenter.py` | frames | `Segment` (audio, start, end) | Silero VAD; params: threshold, min silence, pre-roll, max length |
-| `speakers/identifier.py` | call-side `Segment` | speaker label | Embeddings + online cosine matching; mic side → `Me` |
-| `asr/transcriber.py` | float32 16 kHz audio | Armenian text | NVIDIA FastConformer (hy) |
-| `mt/translator.py` | Armenian text | English text | NLLB-200 distilled |
-| `pipeline.py` | config | runs threads, queue, latency log | The only place that wires modules together |
-| `output.py` | finished `Segment` | terminal lines | Single printer thread |
-| `main.py` | CLI flags | — | `--list-devices --mic --call` + tuning flags |
-| `eval/` | eval set | CER/WER, latency, speaker accuracy | Separate scripts, not part of the live app |
-
-Each module is testable on its own with a small script before it is wired in.
+The module split, contracts, budgets and build order are in **MODULES.md** (one brief per module in `briefs/`).
+Shared types: `transcriber/contracts.py`; each module's interface is in its own file. Decision: D6.
 
 ## 5. Milestones (walking skeleton first, then the weakest link)
 
 | # | Milestone | Done when | Est. |
 |---|---|---|---|
-| M0 | Environment + audio routing | Python env works; BlackHole + Multi-Output set up; level-meter script shows both inputs | 2 h |
+| M0 ✅ | Environment + audio routing | Python env works; BlackHole + Multi-Output set up; level-meter script shows both inputs | 2 h |
 | M1 | Walking skeleton (mic only) | Speak Armenian → HY + EN lines appear in terminal | 3 h |
 | M2 | Two sources | Mic → `Me`, BlackHole → `Call` lines, in parallel | 2 h |
 | M3 | Eval set + measurement | CER/WER + latency per model; decide ASR decoder and NLLB size | 4 h |
@@ -118,6 +106,5 @@ Commit after every working step. One change at a time.
 
 ## 9. Open questions
 
-- Python environment tool (lean: `uv` with Python 3.11).
-- GitHub remote for the repo.
 - Exact call app for the interview (routing works for any app; confirm its speaker setting later).
+- Speakers vs headphones for the interview: decide after measuring echo (TESTS.md E6).
