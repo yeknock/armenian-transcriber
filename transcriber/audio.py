@@ -3,6 +3,8 @@
 Contract, tests and done-criteria: briefs/audio.md
 """
 import queue
+import threading
+import time
 
 import numpy as np
 import sounddevice as sd
@@ -109,26 +111,90 @@ class AudioCapture:
     - chunk.start = seconds since `session_start` (one time.monotonic() value shared by
       both sources), counted from samples received, so it does not drift
     - the sounddevice callback only copies data; resampling and chunking run outside it
+
+    Data flow: sounddevice callback (audio thread: copy block -> raw queue)
+               -> worker thread (_Rechunker: mono, 16 kHz, 512-sample chunks) -> `out`.
+    Errors on those threads do not reach the main thread by themselves, so the owner
+    calls check() regularly, and once more after stop().
     """
 
     def __init__(self, source: str, device: int, session_start: float,
                  out: queue.Queue[AudioChunk]) -> None:
-        raise NotImplementedError
+        info = sd.query_devices(device)
+        if info["max_input_channels"] < 1:
+            raise ValueError(f"Device {device} {info['name']!r} has no input channels.")
+        self._source = source
+        self._device_name = info["name"]
+        self._rate = int(info["default_samplerate"])        # capture at the device's own rate
+        self._channels = min(2, info["max_input_channels"])  # mono or stereo; averaged to mono later
+        self._session_start = session_start
+        self._out = out
+        self._raw: queue.Queue = queue.Queue()  # (callback time, block) or None = stop
+        self._dropouts = 0
+        self._peak = 0.0
+        self._error: Exception | None = None
+        self._running = False
+        # latency="low": with sounddevice's default "high", BlackHole delivers 4096-frame blocks
+        # (85 ms), so call audio reaches us up to 85 ms later; "low" gives 480 frames (10 ms).
+        # The mic goes from 512 to 64 frames. Measured on the MacBook Air M1, 2026-10-30.
+        # Cost: many more callbacks; watch `dropouts` under full load (TESTS.md).
+        self._stream = sd.InputStream(device=device, samplerate=self._rate, channels=self._channels,
+                                      dtype="float32", latency="low", callback=self._callback)
+        self._worker = threading.Thread(target=self._work, name=f"audio-{source}", daemon=True)
+
+    def _callback(self, indata, frames, time_info, status) -> None:
+        # Audio thread: must stay short and never wait. PortAudio reuses `indata`, so copy it.
+        if status:
+            self._dropouts += 1
+        self._raw.put((time.monotonic(), indata.copy()))
+
+    def _work(self) -> None:
+        try:
+            rechunker = None
+            while (item := self._raw.get()) is not None:
+                callback_time, block = item
+                if rechunker is None:
+                    # The first callback runs right after its block was recorded, so the
+                    # block's first sample is about one block length earlier.
+                    t0 = callback_time - len(block) / self._rate - self._session_start
+                    rechunker = _Rechunker(self._source, self._rate, self._channels, t0)
+                self._peak = max(self._peak, float(np.max(np.abs(block))))
+                for chunk in rechunker.push(block):
+                    self._out.put(chunk)
+        except Exception as error:   # kept, not swallowed: check() raises it on the main thread
+            self._error = error
 
     def start(self) -> None:
-        raise NotImplementedError
+        self._worker.start()
+        self._stream.start()
+        self._running = True
 
     def stop(self) -> None:
-        """Stop and close the stream."""
-        raise NotImplementedError
+        """Stop and close the stream and end the worker; safe to call after a failure.
+        Errors are raised by check(), not here. A last partial chunk (< 32 ms) is dropped."""
+        self._running = False
+        self._stream.stop()
+        self._stream.close()
+        if self._worker.is_alive():
+            self._raw.put(None)
+            self._worker.join()
+
+    def check(self) -> None:
+        """Raise RuntimeError if capture has failed (worker error or the stream stopped by itself)."""
+        if self._error is not None:
+            raise RuntimeError(f"audio capture for {self._source!r} ({self._device_name!r}) failed: "
+                               f"{self._error!r}") from self._error
+        if self._running and not self._stream.active:
+            raise RuntimeError(f"audio stream for {self._source!r} ({self._device_name!r}) stopped "
+                               f"unexpectedly; see the error printed above.")
 
     @property
     def dropouts(self) -> int:
         """Overflow/underflow reports from the audio driver since start()."""
-        raise NotImplementedError
+        return self._dropouts
 
     @property
     def peak(self) -> float:
         """Loudest absolute sample since start(). 0.0 means only digital silence
         (usually a missing macOS Microphone permission or wrong routing)."""
-        raise NotImplementedError
+        return self._peak

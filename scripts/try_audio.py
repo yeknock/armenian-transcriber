@@ -3,25 +3,119 @@
 Run from the repo root:
     python -m scripts.try_audio --list
     python -m scripts.try_audio --selftest
-    python -m scripts.try_audio --mic "MacBook Air Microphone" --call BlackHole
+    python -m scripts.try_audio --mic "MacBook Air Microphone" --call BlackHole --seconds 60
 """
 import argparse
+import queue
+import time
 
 import numpy as np
 import sounddevice as sd
 
-from transcriber.audio import _Rechunker, list_input_devices, resolve_device
-from transcriber.contracts import CHUNK_SAMPLES, SAMPLE_RATE
+from transcriber.audio import AudioCapture, _Rechunker, list_input_devices, resolve_device
+from transcriber.contracts import CHUNK_SAMPLES, SAMPLE_RATE, SOURCE_CALL, SOURCE_MIC
+
+CHUNK_SECONDS = CHUNK_SAMPLES / SAMPLE_RATE
+PROGRESS_EVERY_S = 5
+MAX_COUNT_ERROR = 0.01   # brief: chunk count within 1 % of expected
+MAX_LAG_S = 0.1          # brief: clock difference < 0.1 s
 
 SELFTEST_SECONDS = 10
 TONE_HZ = 1000
 
 
-def describe(label: str, spec: str) -> None:
+def describe(label: str, spec: str) -> int:
     device_id = resolve_device(spec)
     info = sd.query_devices(device_id)
     print(f"{label}: {spec!r} -> id {device_id} {info['name']!r}, "
           f"{info['max_input_channels']} input ch, {info['default_samplerate']:.0f} Hz")
+    return device_id
+
+
+def live(mic_id: int, call_id: int, seconds: float) -> None:
+    """Capture both devices at once and check chunk count, clock lag, dropouts and peak."""
+    out: queue.Queue = queue.Queue()
+    session_start = time.monotonic()
+    captures = {SOURCE_MIC: AudioCapture(SOURCE_MIC, mic_id, session_start, out),
+                SOURCE_CALL: AudioCapture(SOURCE_CALL, call_id, session_start, out)}
+    counts = {source: 0 for source in captures}
+    first_arrival = {source: float("nan") for source in captures}   # session seconds
+    last_arrival = {source: float("nan") for source in captures}
+    last_lag = {source: float("nan") for source in captures}
+    max_lag = {source: 0.0 for source in captures}
+    interval_max_lag = {source: 0.0 for source in captures}   # reset at every progress line
+
+    def take(chunk) -> None:
+        now = time.monotonic() - session_start
+        # lag = how long after the chunk's last sample it reached us (device buffer + resampler + queues)
+        lag = now - (chunk.start + CHUNK_SECONDS)
+        if counts[chunk.source] == 0:
+            first_arrival[chunk.source] = now
+        last_arrival[chunk.source] = now
+        counts[chunk.source] += 1
+        last_lag[chunk.source] = lag
+        max_lag[chunk.source] = max(max_lag[chunk.source], lag)
+        interval_max_lag[chunk.source] = max(interval_max_lag[chunk.source], lag)
+
+    print(f"Capturing for {seconds:g} s. Speak, and play something to 'Call Output'. Ctrl+C stops early.")
+    next_progress = PROGRESS_EVERY_S
+    try:
+        for capture in captures.values():
+            capture.start()
+        while (elapsed := time.monotonic() - session_start) < seconds:
+            try:
+                take(out.get(timeout=0.2))   # wake up regularly to call check()
+            except queue.Empty:
+                pass
+            for capture in captures.values():
+                capture.check()
+            if elapsed >= next_progress:
+                next_progress += PROGRESS_EVERY_S
+                print(f"  {elapsed:5.1f} s   " + "   ".join(
+                    f"{s}: {counts[s]} chunks, lag max {interval_max_lag[s] * 1000:3.0f} ms, "
+                    f"peak {captures[s].peak:.3f}, dropouts {captures[s].dropouts}" for s in captures))
+                interval_max_lag = {source: 0.0 for source in captures}
+    except KeyboardInterrupt:
+        print("\nStopped early.")
+    finally:   # always release the devices and threads, also when check() raised
+        stop_begin = time.monotonic()
+        for capture in captures.values():
+            capture.stop()
+        stop_seconds = time.monotonic() - stop_begin
+    for capture in captures.values():
+        capture.check()   # errors from the last moments before stop()
+
+    # Only chunks taken while capturing are measured. Chunks still queued now waited during
+    # stop() (which can take ~0.1-0.3 s on macOS); measuring them would add that wait to the lag.
+    # Expected chunks are counted over the time chunks were arriving (first to last arrival).
+    print(f"\nResult (measured while capturing; stopping took {stop_seconds * 1000:.0f} ms, "
+          f"{out.qsize()} chunks still queued were not measured):")
+    all_ok = True
+    for source, capture in captures.items():
+        if counts[source] < 2:
+            raise SystemExit(f"{source}: only {counts[source]} chunks arrived; nothing to measure.")
+        span = last_arrival[source] - first_arrival[source]
+        expected = span / CHUNK_SECONDS + 1
+        count_error = abs(counts[source] - expected) / expected
+        print(f"  {source}: first chunk after {first_arrival[source]:.2f} s, "
+              f"chunks arrived for {span:.1f} s")
+        checks = {
+            f"chunks {counts[source]} vs expected {expected:.0f} ({count_error:.2%} off)":
+                count_error <= MAX_COUNT_ERROR,
+            f"clock lag last {last_lag[source] * 1000:.0f} ms, max {max_lag[source] * 1000:.0f} ms":
+                max_lag[source] < MAX_LAG_S,
+            f"dropouts {capture.dropouts}": capture.dropouts == 0,
+            f"peak {capture.peak:.3f}": capture.peak > 0.0,
+        }
+        for text, ok in checks.items():
+            print(f"    {'PASS' if ok else 'FAIL'}  {text}")
+            all_ok &= ok
+        if capture.peak == 0.0:
+            print("    peak 0.0 = only digital silence. Check System Settings -> Privacy & Security -> "
+                  "Microphone (allow your terminal app), and that sound is playing to 'Call Output'.")
+    print("LIVE CHECK PASSED" if all_ok else "LIVE CHECK FAILED")
+    if not all_ok:
+        raise SystemExit(1)
 
 
 def _push_all(rechunker: _Rechunker, signal: np.ndarray, block_sizes) -> list:
@@ -110,6 +204,7 @@ def main() -> None:
                         help="check resampling and chunking with generated audio (no devices)")
     parser.add_argument("--mic", help="microphone: device id or part of its name")
     parser.add_argument("--call", help="call audio (BlackHole): device id or part of its name")
+    parser.add_argument("--seconds", type=float, default=60, help="how long to capture (default 60)")
     args = parser.parse_args()
 
     if args.list:
@@ -121,10 +216,11 @@ def main() -> None:
     if args.mic is None or args.call is None:
         parser.error("give --list, or both --mic and --call")
     try:
-        describe("mic ", args.mic)
-        describe("call", args.call)
+        mic_id = describe("mic ", args.mic)
+        call_id = describe("call", args.call)
     except ValueError as error:
         raise SystemExit(f"error: {error}")
+    live(mic_id, call_id, args.seconds)
 
 
 if __name__ == "__main__":
