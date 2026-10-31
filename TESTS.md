@@ -50,6 +50,6 @@ Result: ✅ pass · ❌ fail (+ note) · ⬜ not run
 | A5 | 60 s, both sources, YouTube + two people talking: chunks within 1 %, lag < 0.1 s, 0 dropouts | ✅ 2026-10-30: 0.01 % / 0.02 %, max 59 / 46 ms, 0 |
 | A6 | Callback crash or worker error → `RuntimeError` naming the source; driver overflow counted as a dropout | ✅ test env |
 | A7 | Ctrl+C during `try_audio` → "Stopped early.", result printed, no traceback | ✅ 2026-10-30 |
-| A8 | `record.py` writes 16 kHz mono 16-bit, exact length, correct pitch, no clicks (440 Hz tone read back) | ✅ test env |
+| A8 | `record.py` writes 16 kHz mono 16-bit, exact length, correct pitch, no clicks (440 Hz tone read back); refuses an existing file and `--seconds 0`; Ctrl+C writes nothing, no traceback | ✅ test env |
 | A9 | `record.py` clips from mic and BlackHole sound right | ✅ 2026-10-31 (the mic clip also has the speaker sound: echo, see E6) |
 | A10 | `dropouts` stay 0 with ASR + MT running (`latency="low"` means a mic callback every 1.3 ms) | ⬜ M5 soak test |

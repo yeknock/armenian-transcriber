@@ -55,6 +55,8 @@ def main() -> None:
     parser.add_argument("--out", type=Path, required=True, help="WAV file to write (must not exist)")
     args = parser.parse_args()
 
+    if args.seconds <= 0:
+        parser.error("--seconds must be greater than 0")
     if args.out.exists():
         raise SystemExit(f"error: {args.out} already exists; choose another name or delete it first.")
     try:
@@ -63,7 +65,10 @@ def main() -> None:
         raise SystemExit(f"error: {error}")
 
     print(f"Recording {args.seconds:g} s from device {device_id}. Ctrl+C cancels (nothing is written).")
-    audio, peak = record(device_id, args.seconds)
+    try:
+        audio, peak = record(device_id, args.seconds)
+    except KeyboardInterrupt:
+        raise SystemExit("\nCancelled; nothing was written.")
     args.out.parent.mkdir(parents=True, exist_ok=True)
     write_wav(args.out, audio)
     print(f"Wrote {args.out}: {len(audio) / SAMPLE_RATE:.2f} s, {SAMPLE_RATE} Hz, mono, 16-bit, peak {peak:.3f}")

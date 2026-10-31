@@ -74,7 +74,8 @@ def live(mic_id: int, call_id: int, seconds: float) -> None:
                 print(f"  {elapsed:5.1f} s   " + "   ".join(
                     f"{s}: {counts[s]} chunks, lag max {interval_max_lag[s] * 1000:3.0f} ms, "
                     f"peak {captures[s].peak:.3f}, dropouts {captures[s].dropouts}" for s in captures))
-                interval_max_lag = {source: 0.0 for source in captures}
+                for source in interval_max_lag:
+                    interval_max_lag[source] = 0.0
     except KeyboardInterrupt:
         print("\nStopped early.")
     finally:   # always release the devices and threads, also when check() raised
@@ -214,7 +215,7 @@ def main() -> None:
         selftest()
         return
     if args.mic is None or args.call is None:
-        parser.error("give --list, or both --mic and --call")
+        parser.error("give --list, --selftest, or both --mic and --call")
     try:
         mic_id = describe("mic ", args.mic)
         call_id = describe("call", args.call)

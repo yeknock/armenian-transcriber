@@ -44,7 +44,8 @@ between the last `chunk.start` and the wall clock, dropouts, and peak.
 ## Status
 **Done (2026-10-31), chat `03-audio`.** Commits: `audio: list and resolve input devices`,
 `audio: streaming resample and chunking`, `audio: AudioCapture with low-latency streams and live two-device check`,
-`audio: record.py for 16 kHz mono test clips`.
+`audio: record.py for 16 kHz mono test clips`, `audio: status, tests and decision D7`,
+`audio: final review fixes (record.py --seconds/Ctrl+C, try_audio messages)`.
 
 **What exists** (`transcriber/audio.py`):
 - `list_input_devices()`, `resolve_device(spec)` — exact full name wins over part-of-name matches; errors list the candidates.
@@ -58,6 +59,14 @@ lag (chunk end → in our hands) max 59 ms mic / 46 ms call, 0 dropouts. Streams
 stopping both takes ~0.25 s. Device blocks with `latency="low"`: mic 64 frames, BlackHole 480 frames (with the default
 `"high"`: 512 and 4096 = 85 ms).
 
+**How the live check measures (differs from "Standalone checks" above, on purpose):** expected chunks are
+counted over the time chunks were arriving (first to last arrival), not over `seconds`, because opening and
+closing macOS streams takes ~0.25 s each, in which no audio can arrive; lag (`arrival − chunk end`) is measured on
+every chunk taken while capturing, not only the last one, and chunks still queued during `stop()` are not measured.
+Both earlier "failures" (1.5 % count, 240–370 ms call lag) came from measuring that way, not from the capture.
+The 1 % count limit is meant for the 60 s run: after a 2 s run, one chunk is already 1.4 %.
+`python -m scripts.try_audio --selftest` runs the offline resampling/chunking checks (no devices).
+
 **Notes for the integration chat:**
 - Call `check()` on both captures in the main loop (e.g. every 0.2 s) and once after `stop()`; wrap the loop in
   `try/finally` that calls `stop()` on both (see `scripts/try_audio.py live()`).
@@ -70,3 +79,6 @@ stopping both takes ~0.25 s. Device blocks with `latency="low"`: mic 64 frames, 
    worker thread do not reach the main thread by themselves (sounddevice docs: exceptions in the callback are
    "not propagated to the main thread", and the callback is not called again). `check()` raises `RuntimeError`
    if the worker failed or the stream stopped by itself. Integration chat: confirm and log in DECISIONS.md.
+2. **Shared docs to update (outside this chat's files):** `PLAN.md` §3 thread list — audio now has 2 callbacks
+   **and 2 worker threads** (one per `AudioCapture`); the same line's "2 segmenter threads" already contradicts D6
+   (push-based `Segmenter`, no threads). `MODULES.md` module table — audio's Decision column should be **D7**.
