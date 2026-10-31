@@ -1,3 +1,5 @@
 numpy
 sounddevice
 soxr
+silero-vad==6.2.3
+onnxruntime
