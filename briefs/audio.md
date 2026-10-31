@@ -35,14 +35,38 @@ python -m scripts.record --device BlackHole --seconds 10 --out eval/audio/test_c
 between the last `chunk.start` and the wall clock, dropouts, and peak.
 
 ## Done when
-- [ ] wrong name, ambiguous name and output-only device each give a clear error
-- [ ] 60 s with both sources: chunk count within 1 % of expected, clock difference < 0.1 s, 0 dropouts
-- [ ] a recorded WAV is 16 kHz mono and sounds right (correct speed, no clicks)
+- [x] wrong name, ambiguous name and output-only device each give a clear error
+- [x] 60 s with both sources: chunk count within 1 % of expected, clock difference < 0.1 s, 0 dropouts
+- [x] a recorded WAV is 16 kHz mono and sounds right (correct speed, no clicks)
 
 **Out of scope:** VAD, echo, devices plugged in or out while running.
 
 ## Status
-(not started)
+**Done (2026-10-31), chat `03-audio`.** Commits: `audio: list and resolve input devices`,
+`audio: streaming resample and chunking`, `audio: AudioCapture with low-latency streams and live two-device check`,
+`audio: record.py for 16 kHz mono test clips`.
+
+**What exists** (`transcriber/audio.py`):
+- `list_input_devices()`, `resolve_device(spec)` — exact full name wins over part-of-name matches; errors list the candidates.
+- `_Rechunker` (internal, no threads/devices): mono mix → `soxr.ResampleStream` → exact 512-sample chunks,
+  `start = t0 + emitted / 16000`; output clipped to [-1, 1].
+- `AudioCapture`: callback copies blocks → worker thread runs `_Rechunker` → `out`. Device's own rate, ≤ 2 channels,
+  `latency="low"`. Extra method `check()` (see Contract questions). `stop()` only cleans up and never raises.
+
+**Measured on the MacBook Air M1** (60 s, YouTube on Call Output + two people talking): chunk count 0.01 % / 0.02 % off,
+lag (chunk end → in our hands) max 59 ms mic / 46 ms call, 0 dropouts. Streams need ~0.25 s to deliver the first chunk;
+stopping both takes ~0.25 s. Device blocks with `latency="low"`: mic 64 frames, BlackHole 480 frames (with the default
+`"high"`: 512 and 4096 = 85 ms).
+
+**Notes for the integration chat:**
+- Call `check()` on both captures in the main loop (e.g. every 0.2 s) and once after `stop()`; wrap the loop in
+  `try/finally` that calls `stop()` on both (see `scripts/try_audio.py live()`).
+- Measure latency only on chunks taken while capturing; chunks left in the queue during `stop()` wait ~0.25 s.
+- The mic also hears the call through the speakers (echo, out of scope; TESTS E6).
+- With `latency="low"` the mic callback runs every 1.3 ms: watch `dropouts` under full ASR+MT load (TESTS A10).
 
 ## Contract questions
-(none)
+1. **`AudioCapture.check()` was added** (not in the original interface). Errors on the audio callback thread and the
+   worker thread do not reach the main thread by themselves (sounddevice docs: exceptions in the callback are
+   "not propagated to the main thread", and the callback is not called again). `check()` raises `RuntimeError`
+   if the worker failed or the stream stopped by itself. Integration chat: confirm and log in DECISIONS.md.

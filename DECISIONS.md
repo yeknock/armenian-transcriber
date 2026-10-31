@@ -84,3 +84,25 @@ they can run in parallel without conflicts.
 a Git branch per module — all chats share one working folder, so switching branches would change files
 under another chat. Shared-types file is not named `types.py`: it would hide Python's built-in `types`
 module when a script runs from inside the package.
+
+## D7 — Audio capture: sounddevice callback + worker thread, soxr streaming resampler, `latency="low"` (2026-10-30) — Decided
+**Capture:** `sounddevice` 0.5.6 (PortAudio, MIT; already proven by the M0 level meter). The callback only copies
+each block onto a queue; a worker thread mixes to mono, resamples and cuts 512-sample chunks. Errors on those threads
+do not reach the main thread (sounddevice docs), so `AudioCapture.check()` raises them (contract question in
+`briefs/audio.md`). Rejected: a blocking `read()` loop — simpler errors, but a late reader overflows PortAudio's small buffer.
+**Resampler:** `soxr` 1.1.0 (`ResampleStream`, LGPL-2.1+, wheels for macOS arm64). Measured: streamed output equals
+one-shot resampling exactly (difference 0.0) for random block sizes, and matches an ideal 16 kHz tone to ~3e-7, so
+no clicks at block borders and `start = t0 + n / 16000` is exact; hold-back ~15 ms (48 kHz) / ~40 ms (44.1 kHz).
+Rejected: resampling each block alone (clicks — the self-test catches it), `scipy.signal.resample_poly` (no stream
+state; we would write the error-prone part ourselves), `samplerate` (slower), `torchaudio` (needs torch), opening the
+device at 16 kHz (unverified Core Audio behaviour; would change BlackHole's rate under "Call Output").
+**Clipping:** the resampler overshoots on full-scale input (1.17 for a full-scale square wave); output is clipped to
+[-1, 1] as the contract promises. Raising an error instead would stop the program whenever someone talks loudly; the
+hardware clips at ±1 already.
+**`latency="low"`:** with sounddevice's default `"high"`, BlackHole delivers 4096-frame blocks (85 ms), so call audio
+reaches us up to 85 ms later; `"low"` gives 480 frames (10 ms); the mic goes from 512 to 64 frames. Live 60 s check
+after the change: max lag 59 ms mic / 46 ms call, 0 dropouts. **Risk:** many more callbacks → watch `dropouts` under
+full load (TESTS A10). Note: the 240–370 ms "lag" first seen came from the test measuring chunks that waited
+during `stop()` (~0.25 s), not from the capture; the test now measures only while capturing.
+**Audio setup fact (confirms D0):** "Call Output" = BlackHole 2ch as Primary (clock) + MacBook Air Speakers with
+Drift Correction; 48 kHz.
