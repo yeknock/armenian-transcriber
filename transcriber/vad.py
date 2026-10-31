@@ -99,9 +99,11 @@ class Segmenter:
                 the dip is long enough. This keeps nonstop speech flowing out with almost no
                 wait (a pause of min_silence_ms may never come). 96 ms is longer than the
                 closure inside a consonant, so the cut should fall between words.
-      too long  with no such dip, the phrase is cut at max_segment_s, right there (this
-                can split a word). The rest goes on as the next phrase; pieces never overlap
-                and never leave audio out.
+      too long  with no such dip, the phrase is cut at max_segment_s, at the quietest chunk
+                (lowest RMS) of the last quiet_search_ms. In fluent speech Silero stays
+                above threshold for 10 s and more, but the gaps between words are still
+                20-35 dB quieter than the words (measured). The audio after the cut goes
+                on as the next phrase; pieces never overlap and never leave audio out.
       too short phrases with less than min_speech_ms from the first to the last speech
                 chunk are dropped and counted in dropped_short.
 
@@ -113,7 +115,7 @@ class Segmenter:
     def __init__(self, source: str, *, threshold: float = 0.5, neg_threshold: float = 0.35,
                  min_silence_ms: float = 500, pad_ms: float = 200, soft_max_s: float = 5.0,
                  min_dip_ms: float = 96, max_segment_s: float = 10.0,
-                 min_speech_ms: float = 250) -> None:
+                 quiet_search_ms: float = 1000, min_speech_ms: float = 250) -> None:
         if source not in (SOURCE_MIC, SOURCE_CALL):
             raise ValueError(f"source must be {SOURCE_MIC!r} or {SOURCE_CALL!r}, got {source!r}")
         if not 0 < neg_threshold < threshold < 1:
@@ -126,10 +128,14 @@ class Segmenter:
         self._soft_chunks = int(soft_max_s / CHUNK_SECONDS)
         self._min_dip = _to_chunks(min_dip_ms)
         self._max_chunks = int(max_segment_s / CHUNK_SECONDS)   # rounded down: never longer than asked
+        self._quiet_search = _to_chunks(quiet_search_ms)
         self._min_speech = _to_chunks(min_speech_ms)
-        if min(self._min_silence, self._min_dip, self._min_speech) < 1 or self._pad < 0:
-            raise ValueError("min_silence_ms, min_dip_ms and min_speech_ms must be at least one chunk "
-                             "(32 ms), pad_ms must not be negative")
+        if min(self._min_silence, self._min_dip, self._quiet_search, self._min_speech) < 1 or self._pad < 0:
+            raise ValueError("min_silence_ms, min_dip_ms, quiet_search_ms and min_speech_ms must be at least "
+                             "one chunk (32 ms), pad_ms must not be negative")
+        if self._quiet_search > self._max_chunks - self._soft_chunks:
+            raise ValueError(f"quiet_search_ms={quiet_search_ms} must not be longer than "
+                             f"max_segment_s - soft_max_s")
         if not self._pad + self._min_speech < self._soft_chunks < self._max_chunks:
             raise ValueError(f"need pad_ms + min_speech_ms < soft_max_s < max_segment_s, got "
                              f"{pad_ms} ms, {min_speech_ms} ms, {soft_max_s} s, {max_segment_s} s")
@@ -186,7 +192,7 @@ class Segmenter:
         if len(self._chunks) >= self._soft_chunks and self._dip >= self._min_dip:
             return self._cut(len(self._chunks) - self._dip + self._dip // 2)   # middle of the dip
         if len(self._chunks) >= self._max_chunks:
-            return self._cut(len(self._chunks))                                # no dip: right here
+            return self._cut(self._quietest_recent())                          # no dip: quietest point
         return []
 
     def flush(self) -> list[Segment]:
@@ -213,14 +219,30 @@ class Segmenter:
         return segments
 
     def _cut(self, cut: int) -> list[Segment]:
-        """Long phrase: chunks before index `cut` become a segment, the rest becomes pre-roll."""
+        """Long phrase: chunks before index `cut` become a segment. The rest goes on as the
+        next phrase if it holds speech (after a hard cut), else it becomes pre-roll."""
         segments = self._emit(self._chunks[:cut], self._probs[:cut])
-        self._wait_again(self._chunks[cut:], self._probs[cut:])
+        rest, rest_probs = self._chunks[cut:], self._probs[cut:]
+        speech = [i for i, q in enumerate(rest_probs) if q >= self._threshold]
+        if not speech:
+            self._wait_again(rest, rest_probs)
+            return segments
+        self._chunks, self._probs = rest, rest_probs
+        after = [i for i in range(speech[-1] + 1, len(rest_probs)) if rest_probs[i] < self._neg_threshold]
+        self._silence_from = after[0] if after else None
+        self._dip = len(rest_probs) - speech[-1] - 1
         return segments
 
+    def _quietest_recent(self) -> int:
+        """Index of the quietest chunk (lowest RMS) among the last quiet_search chunks;
+        the latest one wins a tie, so the piece is handed over as early as possible."""
+        first = len(self._chunks) - self._quiet_search
+        loudness = [float(np.sqrt(np.mean(np.square(c.samples)))) for c in self._chunks[first:]]
+        return first + max(range(len(loudness)), key=lambda i: (-loudness[i], i))
+
     def _wait_again(self, rest: list[AudioChunk], rest_probs: list[float]) -> None:
-        """Back to waiting for speech. `rest` is audio after a cut, never speech: trailing silence,
-        the second half of a dip, or nothing. Its last pad chunks become the next pre-roll."""
+        """Back to waiting for speech. `rest` is audio after a cut that holds no speech: trailing
+        silence or the second half of a dip. Its last pad chunks become the next pre-roll."""
         self._chunks, self._probs, self._silence_from, self._dip = [], [], None, 0
         self._preroll.extend(zip(rest, rest_probs))      # the deque keeps only the last pad chunks
 

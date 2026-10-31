@@ -98,7 +98,8 @@ class SileroModelTest(unittest.TestCase):
 
 # ---------------------------------------------------------------- Segmenter rules
 # With the defaults: wait 16 chunks of silence, pad 6 chunks, min speech 8 chunks,
-# early cut after 156 chunks (5 s) at a dip of 3 chunks, hard cut at 312 chunks (10 s).
+# early cut after 156 chunks (5 s) at a dip of 3 chunks, hard cut at 312 chunks (10 s) at the
+# quietest of the last 31 chunks (1 s).
 S, Q, U = 0.9, 0.1, 0.4      # speech, silence (quiet), unsure (between 0.35 and 0.5)
 T0 = 5.0                     # session time of the first chunk; not 0, so wrong time maths shows
 
@@ -116,14 +117,20 @@ class FakeModel:
         pass
 
 
-def run(probs, source=SOURCE_MIC, flush=True, **tuning):
-    """Feed one chunk per probability. Chunk i's samples all equal i / 10000, so a segment's
-    audio tells exactly which chunks it holds. Returns (segments, [chunk index of each return], segmenter)."""
+LOUD = 0.3                   # loudness of every fake chunk, unless the test makes some quiet
+
+
+def run(probs, source=SOURCE_MIC, flush=True, quiet=(), **tuning):
+    """Feed one chunk per probability. Chunk i's first sample is i / 10000, so a segment's audio
+    tells exactly which chunks it holds; its other samples are LOUD, or 0.001 for indices in `quiet`.
+    Returns (segments, [chunk index of each return], segmenter)."""
     segmenter = Segmenter(source, **tuning)
     segmenter._model = FakeModel(probs)
     segments, returned_at = [], []
     for i in range(len(probs)):
-        chunk = AudioChunk(source, T0 + i * CHUNK_SECONDS, np.full(CHUNK_SAMPLES, i / 10000, np.float32))
+        samples = np.full(CHUNK_SAMPLES, 0.001 if i in quiet else LOUD, np.float32)
+        samples[0] = i / 10000
+        chunk = AudioChunk(source, T0 + i * CHUNK_SECONDS, samples)
         for segment in segmenter.feed(chunk):
             segments.append(segment)
             returned_at.append(i)
@@ -223,13 +230,25 @@ class SegmenterTest(unittest.TestCase):
         segments, _, _ = run([Q] * 10 + [S] * 200 + [Q] * 2 + [S] * 50 + [Q] * 30)
         self.assertEqual(len(segments), 1)
 
-    def test_long_speech_without_pause_is_cut_at_max_length(self):
+    def test_long_speech_without_pause_is_cut_by_10_s(self):
         segments, _, _ = run([Q] * 10 + [S] * 1000 + [Q] * 30)
         self.assertWellFormed(segments)
         self.assertGreater(len(segments), 3)
-        self.assertEqual(len(held(segments[0])), 312)
+        for segment in segments[:-1]:
+            self.assertGreaterEqual(len(held(segment)), 312 - 31)   # cut within the last second
+            self.assertLess(len(held(segment)), 312)
         for first, second in zip(segments, segments[1:]):
             self.assertEqual(held(first)[-1] + 1, held(second)[0])   # nothing lost, nothing twice
+
+    def test_hard_cut_at_the_quietest_chunk_of_the_last_second(self):
+        # phrase starts at chunk 10 (pre-roll from 4); 312 chunks are reached at chunk 315,
+        # so the last second is chunks 285-315. Chunk 250 is quieter but too far back.
+        segments, returned_at, _ = run([Q] * 10 + [S] * 400 + [Q] * 30, quiet={250, 300})
+        self.assertWellFormed(segments)
+        self.assertEqual(held(segments[0]), list(range(4, 300)))   # ends right before the quiet chunk
+        self.assertEqual(returned_at[0], 315)                      # handed over 16 chunks (0.5 s) later
+        self.assertEqual(held(segments[1])[0], 300)                # the speech after the cut goes on
+        self.assertEqual(held(segments[1])[-1], 409 + 6)           # ...and ends normally
 
     def test_30_s_of_speech_gives_pieces_no_longer_than_max(self):
         rng = np.random.default_rng(1)
@@ -257,6 +276,8 @@ class SegmenterTest(unittest.TestCase):
             Segmenter("speaker")
         with self.assertRaises(ValueError):
             Segmenter(SOURCE_MIC, threshold=0.3, neg_threshold=0.4)
+        with self.assertRaises(ValueError):
+            Segmenter(SOURCE_MIC, quiet_search_ms=6000)           # longer than max - soft
 
     def test_real_model_ignores_digital_silence(self):
         segmenter = Segmenter(SOURCE_CALL)

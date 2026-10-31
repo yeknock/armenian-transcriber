@@ -11,6 +11,8 @@ Input must be 16 kHz mono 16-bit (scripts/record.py writes that). Convert other 
 """
 import argparse
 import inspect
+import resource
+import sys
 import time
 import wave
 from pathlib import Path
@@ -137,6 +139,10 @@ def main() -> None:
     print(f"Settings: {settings(tuning)}")
     for path in args.wavs:
         run(path, args.source, tuning, args.timeline)
+    peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss          # bytes on macOS, KiB on Linux
+    peak_mb = peak / 1e6 if sys.platform == "darwin" else peak * 1024 / 1e6
+    print(f"\nPeak memory of this process: {peak_mb:.0f} MB (Python + numpy + onnxruntime + Segmenters; "
+          f"torch loaded: {'torch' in sys.modules})")
 
 
 if __name__ == "__main__":
