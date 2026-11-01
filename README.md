@@ -52,7 +52,7 @@ full AI chat history — is part of the result; see [How this was built](#how-th
 | At most 5 s from the end of a phrase to its English line | ✅ measured in live calls: 0 phrases over 5 s; the longest run with the final settings (6.3 min, 81 entries) peaked at 4.64 s |
 | Local models only, Python, runs on my own laptop | ✅ MacBook Air M1, 8 GB, macOS, Python 3.12 |
 | README: setup, models and alternatives, architecture, limitations | ✅ this file |
-| Full AI chat transcripts in `chats/` | ⚠️ one Markdown file per session; for sessions 04–06 the app's export did not work, so those files are handovers, and the original chats are in the app (see [How this was built](#how-this-was-built)) |
+| Full AI chat transcripts in `chats/` | ⚠️ one Markdown file per session; for sessions 04–07 a full export could not be made (the app's export failed, and for 07 the transcript file was not available), so those files are detailed handovers; the original chats are in the app (see [How this was built](#how-this-was-built)) |
 | No model weights, audio or keys in Git | ✅ `.gitignore`; checked with `git ls-files` |
 
 Detailed checks with dates and evidence: [`TESTS.md`](TESTS.md).
