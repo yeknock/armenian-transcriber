@@ -68,7 +68,7 @@ than on recordings (p50 up to ~2 s, D2, TESTS L3); with MT, max 2.1–4.2 s per 
 
 - **Latency log** `logs/latency.csv` (written by the pipeline, read by `eval/latency.py`, git-ignored),
   one row per printed segment:
-  `source,speaker,seg_start,seg_end,asr_s,mt_s,printed_at`
+  `source,speaker,seg_start,seg_end,asr_s,speaker_s,mt_s,printed_at` (`speaker_s` added 2026-11-01: time of the speaker step)
   (`seg_*` and `printed_at` in session seconds, `*_s` = durations; latency = `printed_at − seg_end`).
 - **Test audio:** `eval/audio/*.wav`, 16 kHz mono (git-ignored). **Reference text:** `eval/refs/<same name>.txt`
   (committed).
@@ -83,9 +83,9 @@ contract. Improvements come after the program runs end to end, aimed at the weak
 | 1 | audio | capture + `scripts/record.py` to record test clips | M1 prep | done (chat 03) |
 | 2 | asr (biggest risk: NeMo on macOS) · mt in parallel (text only, needs no audio) | first working models | M1 prep | done (chats 05, 06; D3d open) |
 | 3 | vad | phrases from a stream | M1 prep | done (chat 04) |
-| 4 | integration v1 | mic only end to end, then both sources | M1, M2 | not started (`scripts/live_asr.py` already runs both sources end to end) |
+| 4 | integration v1 | mic only end to end, then both sources | M1, M2 | v1 built: `main.py` (briefs/integration.md Status) |
 | 5 | eval | eval set + numbers → decide D1a, D3a | M3 | started: `eval/metrics.py`, `eval/run_asr.py`, 3 clips in `eval/real/` (TESTS EV1–EV4) |
-| 6 | speakers | stable call-side labels | M4 | not started |
+| 6 | speakers | stable call-side labels | M4 | built with starting values; tuning open (D4) |
 | 7 | integration v2 | reliability, 10-min soak test, README, rehearsal | M5, M6 | not started |
 
 Chats that touch different files can run at the same time in the same folder (`requirements.txt`: append only).

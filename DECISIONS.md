@@ -279,12 +279,19 @@ segment is non-speech when every word is a single letter or a hum («Հ. Հմ։�
 **Decide by:** `try_mt --written` vs without, on `logs/mt_live.txt` (71 real phrases) and `eval/mt_sentences.txt`;
 the user rates every changed line better / worse / same.
 
-## D4 — Speaker embeddings (2026-10-23) — Open
+## D4 — Speaker embeddings (2026-10-23) — Tentative: TitaNet-Large, threshold and length not yet measured
 Candidates: SpeechBrain ECAPA-TDNN (`spkrec-ecapa-voxceleb`, Apache-2.0, 0.80 % EER VoxCeleb1)
 vs NVIDIA TitaNet (comes with NeMo, which D1a chose: no new library). Speaker embeddings are largely
 language-independent; a 5-language zero-shot study found the two roughly equal.
 Method: online cosine matching against per-speaker centroids; mic side is always `Me`.
 Decide in M4.
+**Built (2026-11-01, after chat 06):** TitaNet-Large (`nvidia/speakerverification_en_titanet_large`, model card:
+23M parameters, 192-number fingerprint, 16 kHz mono, 0.66 % EER VoxCeleb1, CC-BY-4.0; trained on English incl.
+telephone speech) through NeMo's `infer_segment` — no new library. `SpeakerMatcher`: mean direction per speaker,
+cosine >= threshold joins, else a new speaker only if the phrase is >= min_new_s; shorter phrases take the closest
+speaker and never change one; first phrase = Speaker 1. **Starting values 0.5 / 1.0 s, not measured yet:** the user
+chose to finish the program end to end first (2026-11-01). To tune: fill `eval/speakers/spk_two.txt` (2-voice podcast,
+45 phrases) and run `scripts/try_speakers.py` (threshold x length table). ECAPA stays the fallback.
 
 ## D5 — Architecture: cascade, segment-based (2026-10-23) — Tentative
 VAD → (speaker) → ASR → MT, one shared worker. Streaming ASR rejected: much more complex

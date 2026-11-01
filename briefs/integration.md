@@ -43,7 +43,14 @@ EN: Hi, how are you?
 **Out of scope:** everything the brief lists as out of scope (GUI, saving transcripts, echo handling, …).
 
 ## Status
-(not started)
+**v1 built (2026-11-01), not yet run on the Mac.** `main.py` (`--list-devices`, `--mic`, `--call`),
+`transcriber/pipeline.py` (two captures → two Segmenters fed by the main thread → one worker: ASR, non-speech
+dropped, speaker (call side), MT, print; `logs/latency.csv` with `speaker_s` added to the MODULES format; summary at
+exit), `transcriber/output.py` (the brief's entry layout, indented HY / EN). Built from `scripts/live_asr.py`, which
+stays as the diagnostic tool (latency breakdown per phrase). Speakers run in the worker after ASR, not in a thread
+per source (simpler; coughs get no fingerprint). Checked in the test env with fake devices / models: entries, Ctrl+C
+finishing the last phrases, summary, CSV, worker crash → traceback and exit 1, silent mic, wrong / same devices.
+Next: README; live call on the Mac; 10-min soak test (R7a, A10).
 
 ## Contract questions
 (none)

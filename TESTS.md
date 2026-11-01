@@ -9,9 +9,9 @@ Result: ✅ pass · ❌ fail (+ note) · ⬜ not run
 | ID | Check | Result |
 |---|---|---|
 | R1 | Mic and BlackHole levels move independently (`scripts/level_meter.py`) | ✅ 2026-10-24 |
-| R2a | `python main.py --list-devices` prints the input devices | ⬜ |
+| R2a | `python main.py --list-devices` prints the input devices | ✅ 2026-11-01 test env (fake devices); ⬜ Mac |
 | R2b | `python main.py --mic "MacBook Air Microphone" --call BlackHole` starts | ⬜ |
-| R2c | Wrong or ambiguous device name → clear error, non-zero exit code | ⬜ |
+| R2c | Wrong or ambiguous device name → clear error, non-zero exit code | ✅ 2026-11-01 test env (wrong name, missing `--call`, same device for both); ⬜ Mac |
 | R3 | CER/WER on the eval set reported | ✅ 2026-11-01 baseline on `eval/real` (3 clips, 191 words): CER 8.8 %, WER 26.7 % (EV2); more clips and call-side recordings still to add |
 | R4 | English of every eval clip rated good / ok / bad by an Armenian speaker | ⬜ |
 | R5a | Mic lines are always `Me` | ⬜ |
@@ -30,7 +30,7 @@ Result: ✅ pass · ❌ fail (+ note) · ⬜ not run
 | E2 | 30 s non-stop speech → split into several entries, each ≤ 5 s late | ⬜ |
 | E3 | Very short reply ("Այո") → printed; does not create a new speaker | ⬜ |
 | E4 | Ctrl+C → exits within ~1 s, no traceback | ⬜ |
-| E5 | Microphone permission missing → clear message naming the setting | ⬜ |
+| E5 | Microphone permission missing → clear message naming the setting | ✅ 2026-11-01 test env (fake mic of exact zeros: message, exit 1) |
 | E6 | Call audio on speakers → how often echo shows up as `Me` (measure; echo handling is out of scope) | ❌ 2026-11-01 Mac (`logs/live_asr_20261101-175249.csv`, YouTube podcast, MacBook speakers): 10 / 10 `Call` phrases also came out as `Me` (86–100 % time overlap) → use headphones (D0) |
 
 ## Module checks
