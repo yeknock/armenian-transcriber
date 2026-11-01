@@ -11,6 +11,7 @@ group). Speakers cause echo (call audio picked up by the mic, may show as `Me`);
 of scope — measure it (TESTS.md E6), then choose speakers vs headphones for the interview. Call app for the
 interview unknown → audio routing must work with any app.
 **Consequence:** all models together must fit in ~3–3.5 GB; prefer small, single-pass models.
+**Speakers vs headphones decided (2026-11-01, chat 06): headphones.** Measured (TESTS E6): with the call / podcast on the MacBook speakers, every `Call` phrase was also picked up by the mic and printed again as `Me` (10 / 10), with worse audio, so worse Armenian and English. Echo handling stays out of scope (brief); the setup fix is to put headphones instead of the speakers in the "Call Output" Multi-Output Device. Wired or USB headphones are safest; Bluetooth ones only for listening, never as the microphone (headset mode, D0).
 
 ## D0a — Python environment: system Python 3.12.3 + `venv` + `requirements.txt` (2026-10-23) — Decided
 **Why:** already installed; every chosen library supports 3.12; built-in `venv` means no extra
@@ -152,12 +153,12 @@ recordings). Likely cause, not yet verified: the room mic hears the other side t
 so its score stays in the unsure band (0.35–0.5) and the 512 ms silence wait starts late. Still under 5 s with ASR
 (total p95 3.38 s, max 3.76 s), but tight once translation is added → check in M5 (TESTS R7, briefs/integration.md).
 
-## D3 — Translation: NLLB-200 distilled (`hye_Armn → eng_Latn`) (2026-10-23) — Tentative
+## D3 — Translation: NLLB-200 distilled (`hye_Armn → eng_Latn`) (2026-10-23) — Decided (size and beam: D3a; short inputs: D3b)
 **Why:** Built for low-resource languages; NLLB-3.3B scores spBLEU 43.0 / COMET-22 88.3 on
 FLORES-200 hye→en, above GPT-4 few-shot (35.6 / 86.2). Runs locally with CTranslate2 int8.
 **Rejected:** TranslateGemma (Armenian trained only en→hy, not evaluated); local LLMs
 (slower, heavier, variable Armenian quality); 3.3B (too heavy for 8 GB).
-**Open (D3a):** 600M vs 1.3B — decide in M3 by speed + manual quality rating.
+**D3a decided (2026-11-01, chat 06):** 600M, beam 1 (see D3a).
 **Licence note:** CC-BY-NC (research use) — acceptable for the challenge, stated in README.
 **Progress (2026-11-01, chat 05):** CTranslate2 4.8.4 (macOS arm64 wheel; needs only numpy and pyyaml). Conversion
 from Meta's checkpoint with `ct2-transformers-converter --quantization int8 --low_cpu_mem_usage` works with
@@ -172,6 +173,56 @@ metric not stated) ranks general LLMs only, NLLB is not in it. The open models t
 gemma-4-31b (0.284; ~17.5 GB at 4-bit), GLM-5 (~744B MoE), GLM-4.7-Flash (30B-A3B: all 30B in memory), gemma-3-27b,
 Mistral 24B and up. gemma-3-4b would fit (~3 GB at 4-bit, estimate) but scores lowest (0.082), is twice the 1.5 GB
 MT budget, and an LLM writes word by word (estimated 1–2 s per phrase vs 0.8 s). → NLLB stays.
+
+## D3a — NLLB-200-distilled-600M, CTranslate2 int8, greedy decoding (beam 1) (2026-11-01, chat 06) — Decided
+**Size: 600M, the user's decision.** 1.3B was not tried: it needs ~2× the memory and time on an 8 GB fanless M1
+that already holds the ASR (+1.37 GB). Revisit only if 600M is not good enough in the live tests.
+**Beam: 1.** Both run on the 29 lines of `eval/mt_sentences.txt` (`--repeat 3`), each line rated by the user:
+
+| | GOOD / OK / BAD | Median / p95 / max per line | Longest line (24 words) | Model memory | Load |
+|---|---|---|---|---|---|
+| **beam 1 (chosen)** | **21 / 3 / 5** | **0.258 / 0.908 / 1.232 s** | 1.232 s | +1.07 GB | 3.4 s |
+| beam 2 | 19 / 3 / 7 | 0.334 / 1.143 / 1.433 s | 1.433 s | +1.16 GB | 3.8 s |
+
+Beam 1 was rated better or equal on every line (4 lines one grade better) and is 23 % faster (median ratio 0.77).
+Clean sentences, numbers, names, places and the long sentence: GOOD. `եւ` and `և` give the same English.
+Time ≈ 0.10 s + 0.036 s per word (fit on beam 1).
+**5 s rule:** the per-line target "longest line ≤ 0.8 s" is **missed** by lines of 21+ words (0.70–1.23 s). End to end it
+still fits: replaying the busy 10.8 min Zoom call (185 phrases, real hand-over and ASR times) with MT time by
+segment length, pessimistic (a 10 s segment costs the worst line, 1.23 s): p95 3.88 s, max 4.17 s, 0 over 5 s.
+Thin spot: a 10 s mic phrase with the worst mic hand-over seen (3.32 s) + ASR 0.35 s + MT 1.23 s ≈ 4.9 s, so the slow
+mic-side hand-over (D2, TESTS L3) must be fixed in integration.
+**Memory:** the model adds ~1.07 GB (peak, measured apart from torch, which NeMo loads anyway); whole program
+estimate ~2.7 GB (budget ~3.5 GB).
+**Found: short inputs.** NLLB invents text for one-word inputs: «Այո։» → "I did.", «Հ.» → "C. What is the meaning
+of this?", and «Հաջողություն։» split off as its own sentence → "What is the meaning of life?". This matters live:
+33 % of 268 real ASR phrases are one word, and 44 of them are the ASR's output for coughs or "hmm" (`Հովհ.` 22×,
+`Հ։` 13×, …). Colloquial «Ո՞նց ես, ի՞նչ կա չկա» → "Who are you, what's not there?" (BAD). Probe: `eval/mt_short.txt`
+(D3b).
+
+## D3b — Short inputs: one-word sentences stay with a neighbour, a one-word glossary, non-speech not printed (2026-11-01, chat 06) — Decided
+**Probe** (`eval/mt_short.txt`, 30 lines, beam 1, `try_mt --scores`, split vs `--whole`; logs `logs/mt_short_*.txt`):
+- *A one-word sentence inside a longer segment* is right when NLLB sees it with its neighbour, wrong alone:
+  «… կզանգեմ քեզ։ Հաջողություն։» → "… tomorrow. Good luck." (split: "What is the meaning of life?"); «Այո։ Վաղը կգամ։» →
+  "Yes. I will be there tomorrow." (split: "I did."); «Մել։ Շատ եմ …» → "Mel: I'm really …" (split: "I'm not going to
+  lie."). NLLB kept every sentence in these 4 lines. But given **two long sentences** at once it dropped one (line 30:
+  only the second came out). → **`make_pieces`: one-word sentences are joined to the next sentence (or the one
+  before); longer sentences stay split.**
+- *A segment that is one word* has no neighbour. NLLB got most common replies wrong: «Այո։» "I did.", «Ոչ» "What is
+  it?", «Հա։» "I'm going to go.", «Մերսի։» "I'm going to tell you.", «Ալո։» "I'm going to be a little late."; ordinary
+  nouns were right («Սպիտակ։» "White.", «Գիրք։» "The book."). Leaving out `։` did not help. → **`ONE_WORD` glossary**
+  (user's choice): 18 common replies, used only when the whole segment is that word (after `normalize_word`: letters
+  only, lower case, `և` = `եւ`); every other word still goes to NLLB. A deliberate rule-based patch for a measured
+  weakness; it costs 0 ms.
+- *Non-speech*: the ASR's text for coughs / "hmm" / breaths (`Հովհ.` 22×, `Հ։` 13×, `Հ.` 5×, `«ովհ.` 3×, single
+  letters; 0.6–1.9 s, mostly quiet, both sides) became invented sentences («Հ.» "C. What is the meaning of this?",
+  «Հովհ.» "John: I know."). → **`is_non_speech`** (user's choice: don't print them): every word has fewer than 2
+  letters, or every word is one of the two "hmm" spellings, and no digit. `translate()` gives `""`; the pipeline
+  should skip the segment (integration). Cost: a real one-letter reply said alone («Է՞») is hidden.
+- *Scores do not separate invented text*: one-word inputs scored −0.86 to −1.45 whether right or wrong ("White."
+  −0.98, "I'm not sure." −1.35); clean sentences −0.36 to −0.51. Not used as a filter.
+**Still wrong (README limitation):** colloquial phrases («Ո՞նց ես, ի՞նչ կա չկա» "Who are you, what's not there?") and
+garbled ASR input, which NLLB turns into fluent but wrong English.
 
 ## D4 — Speaker embeddings (2026-10-23) — Open
 Candidates: SpeechBrain ECAPA-TDNN (`spkrec-ecapa-voxceleb`, Apache-2.0, 0.80 % EER VoxCeleb1)

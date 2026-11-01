@@ -1,9 +1,10 @@
-"""Live check of audio -> VAD -> ASR on a real call (Zoom or any other app), before the full program exists.
+"""Live check of audio -> VAD -> ASR -> MT on a real call (Zoom or any other app), before the full program exists.
 
 Prints every phrase as it is recognised: session time, side (Me = microphone, Call = BlackHole), the Armenian
-text, and how long after the end of the phrase it was printed (split into VAD wait, queue wait and ASR time).
-Not here yet: the English line (mt module) and Speaker 1/2 labels (speakers module); the full program with all
-of them is the integration step (pipeline.py, main.py). Run from the repo root:
+text, the English, and how long after the end of the phrase it was printed (split into VAD wait, queue wait, ASR
+and MT time). The ASR's text for coughs / "hmm" / breaths (mt.is_non_speech) is not printed, only counted (D3b).
+Not here yet: Speaker 1/2 labels (speakers module); the full program is the integration step (pipeline.py,
+main.py). Run from the repo root:
     python -m scripts.live_asr --list
     python -m scripts.live_asr --mic "MacBook Air Microphone" --call BlackHole
     python -m scripts.live_asr --mic "MacBook Air Microphone" --call BlackHole --save
@@ -28,6 +29,7 @@ import sounddevice as sd
 from transcriber.asr import Transcriber
 from transcriber.audio import AudioCapture, list_input_devices, resolve_device
 from transcriber.contracts import CHUNK_SAMPLES, SAMPLE_RATE, SOURCE_CALL, SOURCE_MIC
+from transcriber.mt import Translator, is_non_speech
 from transcriber.vad import Segmenter
 
 LIMIT_S = 5.0                 # the brief: at most 5 s from the end of a phrase to its line
@@ -35,8 +37,8 @@ MIC_SILENCE_CHECK_S = 3.0     # the mic giving only exact zeros this long = miss
 CALL_SILENCE_WARN_S = 10.0    # BlackHole giving only exact zeros this long = the call app plays somewhere else
 LABELS = {SOURCE_MIC: "Me", SOURCE_CALL: "Call"}
 LOG_DIR = Path("logs")
-CSV_FIELDS = ["source", "label", "seg_start", "seg_end", "handed_at", "asr_start", "asr_end", "printed_at",
-              "latency_s"]
+CSV_FIELDS = ["source", "label", "seg_start", "seg_end", "handed_at", "asr_start", "asr_end", "mt_end", "printed_at",
+              "latency_s", "skipped"]     # skipped = 1: non-speech, not printed (latency_s then empty)
 
 
 def clock(seconds: float) -> str:
@@ -46,17 +48,20 @@ def clock(seconds: float) -> str:
 
 
 class AsrWorker(threading.Thread):
-    """Takes (segment, handed_at) from `inbox`, transcribes and prints it; None ends the thread.
+    """Takes (segment, handed_at) from `inbox`, transcribes, translates and prints it; None ends the thread.
     An error is kept in `error` (not swallowed): the main thread checks it and stops the program."""
 
-    def __init__(self, transcriber: Transcriber, session_start: float, csv_path: Path,
+    def __init__(self, transcriber: Transcriber, translator: Translator, session_start: float, csv_path: Path,
                  save_dir: Path | None) -> None:
         super().__init__(name="asr", daemon=True)
         self.inbox: queue.Queue = queue.Queue()     # unbounded: a phrase is never dropped
         self.error: Exception | None = None
         self.latencies: dict[str, list[float]] = {SOURCE_MIC: [], SOURCE_CALL: []}
         self.asr_times: list[float] = []
+        self.mt_times: list[float] = []
+        self.skipped: dict[str, int] = {SOURCE_MIC: 0, SOURCE_CALL: 0}
         self._transcriber = transcriber
+        self._translator = translator
         self._session_start = session_start
         self._csv_path = csv_path
         self._save_dir = save_dir
@@ -80,25 +85,36 @@ class AsrWorker(threading.Thread):
         asr_start = self._now()
         text = self._transcriber.transcribe(segment.audio)
         asr_end = self._now()
-        latency = asr_end - segment.end      # printing takes microseconds; measured again below
         vad_s, wait_s, asr_s = handed_at - segment.end, asr_start - handed_at, asr_end - asr_start
-        flag = f"   OVER {LIMIT_S:g} s" if latency > LIMIT_S else ""
-        print(f"\n[{clock(segment.start)}] {LABELS[segment.source]}"
-              f"   ({latency:.2f} s after the phrase: VAD {vad_s:.2f} + queue {wait_s:.2f} + ASR {asr_s:.2f}){flag}\n"
-              f"HY: {text if text else '(nothing recognised)'}", flush=True)
-        printed_at = self._now()
-        latency = printed_at - segment.end
-        self.latencies[segment.source].append(latency)
         self.asr_times.append(asr_s)
+        skipped = not text or is_non_speech(text)
+        english = "" if skipped else self._translator.translate(text)
+        mt_end = self._now()
+        mt_s = mt_end - asr_end
+        printed_at = latency = None
+        if skipped:                          # a cough / "hmm" / breath: nothing to show (D3b)
+            self.skipped[segment.source] += 1
+        else:
+            self.mt_times.append(mt_s)
+            latency = mt_end - segment.end   # printing takes microseconds; measured again below
+            flag = f"   OVER {LIMIT_S:g} s" if latency > LIMIT_S else ""
+            print(f"\n[{clock(segment.start)}] {LABELS[segment.source]}"
+                  f"   ({latency:.2f} s after the phrase: VAD {vad_s:.2f} + queue {wait_s:.2f} + ASR {asr_s:.2f}"
+                  f" + MT {mt_s:.2f}){flag}\nHY: {text}\nEN: {english}", flush=True)
+            printed_at = self._now()
+            latency = printed_at - segment.end
+            self.latencies[segment.source].append(latency)
         self._count += 1
         if self._save_dir is not None:
             name = f"{self._count:03d}_{LABELS[segment.source]}_{segment.start:08.3f}"
             write_wav(self._save_dir / f"{name}.wav", segment.audio)
             (self._save_dir / f"{name}.txt").write_text(text + "\n", encoding="utf-8")
+            (self._save_dir / f"{name}.en.txt").write_text(english + "\n", encoding="utf-8")
         return {"source": segment.source, "label": LABELS[segment.source],
                 "seg_start": f"{segment.start:.3f}", "seg_end": f"{segment.end:.3f}",
                 "handed_at": f"{handed_at:.3f}", "asr_start": f"{asr_start:.3f}", "asr_end": f"{asr_end:.3f}",
-                "printed_at": f"{printed_at:.3f}", "latency_s": f"{latency:.3f}"}
+                "mt_end": f"{mt_end:.3f}", "printed_at": "" if printed_at is None else f"{printed_at:.3f}",
+                "latency_s": "" if latency is None else f"{latency:.3f}", "skipped": int(skipped)}
 
 
 def write_wav(path: Path, audio: np.ndarray) -> None:
@@ -144,6 +160,11 @@ def main() -> None:
     started = time.perf_counter()
     transcriber = Transcriber(threads=args.threads)
     print(f"  loaded in {time.perf_counter() - started:.1f} s", flush=True)
+    print("Loading the translation model (~4 s)...", flush=True)
+    started = time.perf_counter()
+    translator = Translator()
+    print(f"  loaded in {time.perf_counter() - started:.1f} s (NLLB {translator.model}, beam {translator.beam_size})",
+          flush=True)
 
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     LOG_DIR.mkdir(exist_ok=True)
@@ -156,7 +177,7 @@ def main() -> None:
     chunks: queue.Queue = queue.Queue()
     captures = {source: AudioCapture(source, device, session_start, chunks) for source, device in devices.items()}
     segmenters = {source: Segmenter(source) for source in captures}
-    worker = AsrWorker(transcriber, session_start, csv_path, save_dir)
+    worker = AsrWorker(transcriber, translator, session_start, csv_path, save_dir)
     max_lag = {source: 0.0 for source in captures}
     mic_checked = call_checked = False
 
@@ -191,7 +212,7 @@ def main() -> None:
             for capture in captures.values():
                 capture.check()
             if worker.error is not None:
-                raise RuntimeError("the ASR worker failed (traceback above)") from worker.error
+                raise RuntimeError("the ASR/MT worker failed (traceback above)") from worker.error
             if not mic_checked and time.monotonic() - session_start >= MIC_SILENCE_CHECK_S:
                 mic_checked = True
                 if captures[SOURCE_MIC].peak == 0.0:
@@ -225,15 +246,18 @@ def main() -> None:
     worker.inbox.put(None)
     worker.join()
     if worker.error is not None:
-        raise RuntimeError("the ASR worker failed (traceback above)") from worker.error
+        raise RuntimeError("the ASR/MT worker failed (traceback above)") from worker.error
 
     print(f"\nSession {clock(time.monotonic() - session_start)}:")
     for source in captures:
         print(f"  {LABELS[source]:4s}  {describe(worker.latencies[source])}; "
+              f"{worker.skipped[source]} non-speech not printed; "
               f"{segmenters[source].dropped_short} short bursts dropped by the VAD; "
               f"{captures[source].dropouts} audio dropouts; chunk lag max {max_lag[source] * 1000:.0f} ms")
     print(f"  all   {describe(worker.latencies[SOURCE_MIC] + worker.latencies[SOURCE_CALL])}"
-          + (f"; ASR max {max(worker.asr_times):.2f} s" if worker.asr_times else ""))
+          + (f"; ASR max {max(worker.asr_times):.2f} s" if worker.asr_times else "")
+          + (f"; MT median {statistics.median(worker.mt_times):.2f} s, max {max(worker.mt_times):.2f} s"
+             if worker.mt_times else ""))
     if captures[SOURCE_CALL].peak == 0.0:
         print(f"  WARNING: {names[SOURCE_CALL]!r} was digital silence the whole time: the call app did not play to "
               "'Call Output', so nothing could be labelled 'Call'. Zoom: Settings > Audio > Speaker.")

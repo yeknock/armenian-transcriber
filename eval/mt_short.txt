@@ -1,0 +1,39 @@
+# Short inputs, for scripts/try_mt.py (briefs/mt.md, chat 06). NLLB invented text for one-word inputs in
+# mt_sentences.txt ("Հ." -> "C. What is the meaning of this?"), and 33 % of 268 real ASR phrases are one word.
+# Run twice: with --scores, and with --scores --whole. One segment per line; # = comment.
+# ASR output for non-speech sounds (coughs, "hmm", breaths; 0.6-1.9 s, mostly quiet, both sides) in the live calls:
+# Հովհ. 22x, Հ։ 13x, Հ. 5x, «ովհ. 3x, Ա։ 1x, Ձ։ 1x (of 268 phrases)
+Հովհ.
+Հ։
+Հ.
+«ովհ.
+Ա։
+Ձ։
+# real one-word replies: as the ASR writes them (with ։) and without the full stop
+Այո։
+Այո
+Ոչ։
+Ոչ
+Հա։
+Հա
+Չէ։
+Լավ։
+Մերսի։
+Իհարկե։
+Ալո։
+Շնորհակալություն։
+Հաջողություն։
+Ցտեսություն։
+# real one-word ASR outputs that are ordinary words
+Սպիտակ։
+Գիրք։
+Բայց։
+# two short words
+Լավ, հասկացա։
+Ոչ, չեմ ուզում։
+# two or more sentences: split (default) vs --whole — does NLLB keep every sentence when it gets them together?
+Լավ, ուրեմն վաղը կզանգեմ քեզ։ Հաջողություն։
+Շնորհակալ եմ. Ցտեսություն.
+Այո։ Վաղը կգամ։
+Մել։ Շատ եմ, էդ մեկի համար իսկապես ամաչում, մյուս բոլոր դեպքերի համար պետք է մի բան ասեմ, նախ ես չեմ ասել որեւէ անձնավորված։
+Անանց շղթան հեռավոր գյուղում ծվարած նրա համար ամերակետով փուշ անուղեղ։ Ի՞նչ եմ գրել հեռավոր գյուղում ծած։

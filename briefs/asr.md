@@ -36,14 +36,14 @@ time and the real-time factor.
 - [x] Armenian text for ≥ 3 of our own recordings (mic + through BlackHole), checked by eye — 4 recordings (18
   segments) plus live Zoom calls; checked by the user
 - [x] load time, RSS and time for a 10 s clip in Status (targets: ≤ 1.0 GB, ≤ 0.8 s) — 9.8 s, **+1.37 GB (over)**, 0.35 s
-- [ ] works with Wi-Fi off (TESTS ASR6, still to run)
+- [x] works with Wi-Fi off (TESTS ASR6, user 2026-11-01)
 - [x] D1a decided with numbers — RNNT head with NeMo (D1a); competitors checked (D1b)
 
 **Out of scope:** VAD, streaming ASR, translation.
 
 ## Status
-**Done except the Wi-Fi-off check (2026-11-01), chat `05-asr`** (the same chat also started the mt module).
-Commit: `asr: NeMo RNNT Transcriber, try_asr and live_asr checks` (not yet made at the time of writing).
+**Done (2026-11-01), chat `05-asr`** (the same chat also started the mt module).
+Commit: `102f7be Finished ASR module. NeMo with RNNT head.` (also holds the mt work so far). VAD tests pass after the NeMo install (TESTS ASR9).
 
 **What exists:**
 - `transcriber/asr.py`: `Transcriber(threads=4)` loads `models/nvidia_hy_nemo/*.nemo` with NeMo 3.0.0, RNNT head, CPU,

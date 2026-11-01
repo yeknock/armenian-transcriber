@@ -31,7 +31,7 @@ Result: ✅ pass · ❌ fail (+ note) · ⬜ not run
 | E3 | Very short reply ("Այո") → printed; does not create a new speaker | ⬜ |
 | E4 | Ctrl+C → exits within ~1 s, no traceback | ⬜ |
 | E5 | Microphone permission missing → clear message naming the setting | ⬜ |
-| E6 | Call audio on speakers → how often echo shows up as `Me` (measure; echo handling is out of scope) | ⬜ |
+| E6 | Call audio on speakers → how often echo shows up as `Me` (measure; echo handling is out of scope) | ❌ 2026-11-01 Mac (`logs/live_asr_20261101-175249.csv`, YouTube podcast, MacBook speakers): 10 / 10 `Call` phrases also came out as `Me` (86–100 % time overlap) → use headphones (D0) |
 
 ## Module checks
 
@@ -87,10 +87,10 @@ Result: ✅ pass · ❌ fail (+ note) · ⬜ not run
 | ASR3 | Time per segment (budget ≤ 0.8 s for 10 s): 0.27–0.35 s, 9.86 s segment 0.35 s, RTF 0.048 | ✅ 2026-11-01 Mac |
 | ASR4 | Armenian text for ≥ 3 recordings (mic + BlackHole), checked by eye: clean phrases right, names / casual speech often wrong | ✅ 2026-11-01 user |
 | ASR5 | NeMo vs onnx-asr: identical text on 18 segments, for both heads (letter for letter) | ✅ 2026-11-01 Mac |
-| ASR6 | Works with Wi-Fi off (NeMo installs telemetry libraries; its log says nothing is collected) | ⬜ |
+| ASR6 | Works with Wi-Fi off (NeMo installs telemetry libraries; its log says nothing is collected) | ✅ 2026-11-01 Mac (user) |
 | ASR7 | Bad input → `ValueError` (not float32, not 1-D, < 0.1 s, > 20 s, NaN); the caller's array is never changed (also checked by `try_asr` on every file) | ✅ test env + Mac |
 | ASR8 | `.venv` run vs earlier NeMo run: same text on 11/11 segments | ✅ 2026-11-01 Mac |
-| ASR9 | VAD tests still pass after installing NeMo into `.venv` (`python -m unittest tests.test_vad`) | ⬜ |
+| ASR9 | VAD tests still pass after installing NeMo into `.venv` (`python -m unittest tests.test_vad`) | ✅ 2026-11-01 Mac (user) |
 | ASR10 | Competitors on the same 11 segments (D1b): whisper-turbo-hy 2.58 s, seamless 2.68 s, whisper-large-hy 45.9 s median per segment vs nvidia 0.30 s; none better by the user's judgement | ✅ 2026-11-01 Mac |
 | ASR11 | Clean exit: once (2026-11-01) `try_asr` printed all results and its summary, then crashed with a segmentation fault while Python shut down; the next run exited cleanly. If it happens again: run with `python -X faulthandler ...` to see which library crashes (A–D in chat 05). Matters for E4 (clean Ctrl+C) | ⚠️ seen once, not reproduced |
 
@@ -103,3 +103,25 @@ labels yet). They give early numbers for R7/E6, not the final checks (those need
 | L2 | 10.8 min Zoom call with routing fixed: 119 `Me` + 66 `Call` phrases, 0 over 5 s; latency p50 1.35 s, p95 3.38 s, max 3.76 s (ASR only) | ✅ 2026-11-01 Mac |
 | L3 | Where the time goes in L2: queue 0.00 s (p50), ASR 0.30 s; VAD hand-over `Call` 0.44 s but `Me` 1.97 s p50 / 3.32 s max (D2 "Found in live calls") | ⚠️ open for M5 |
 | L4 | Ctrl+C: the phrase in progress is still printed, then the summary; second Ctrl+C aborts; silent mic, failed device, ASR crash, wrong / same device → clear error, exit ≠ 0 | ✅ test env (8 scenarios on real recordings) |
+| L5 | Live Zoom call with MT (`live_asr.py` + NLLB-600M): latency p50 / p95 / max incl. MT, 0 over 5 s?, English understandable?, non-speech skipped | ⬜ Mac |
+
+### mt (chats 05–06, MacBook Air M1)
+
+"Test env" = run by Claude with a tiny random NLLB-type model (same CTranslate2 4.8.4 and transformers 5.22.1, real
+conversion command); it checks the code paths, not the English. "Mac" = run by the user with the real NLLB-600M.
+
+| ID | Check | Result |
+|---|---|---|
+| MT1 | Missing model → `FileNotFoundError` with the exact conversion command; bad `model` / `beam_size` → `ValueError`; non-str input → `TypeError`; `""` and punctuation-only input → `""` | ✅ 2026-11-01 test env |
+| MT2 | Tokenizer gives `[hye_Armn, ..., </s>]` at load, else `RuntimeError` (legacy order planted on purpose: caught) | ✅ 2026-11-01 test env + Mac (real NLLB tokenizer passes) |
+| MT3 | Every sentence of a multi-sentence line shows up in the English (lines 17, 18) | ✅ 2026-11-01 Mac (both present; line 17's 2nd sentence mistranslated, see D3a) |
+| MT4 | User rates every line of `eval/mt_sentences.txt` good / ok / bad (NLLB-600M) | ✅ 2026-11-01 user: beam 1 21 / 3 / 5, beam 2 19 / 3 / 7 (`logs/mt_600m_beam*.txt`) |
+| MT5 | Time: median line ≤ 0.5 s, longest line (24 words) ≤ 0.8 s, beam 2 and beam 1 (`try_mt --repeat 3`) | ⚠️ 2026-11-01 Mac, beam 1: median 0.258 s OK; longest 1.232 s OVER (21+ words: 0.70–1.23 s). Replay of the busy call with these times: max 4.17 s, 0 over 5 s (D3a) |
+| MT6 | Memory: model (without torch) ≤ 1.5 GB; load time | ✅ 2026-11-01 Mac: +1.07 GB (beam 1), load 3.4 s |
+| MT7 | Works with Wi-Fi off | ✅ 2026-11-01 Mac (user): all 29 lines, median 0.274 s, max 1.254 s, same as online |
+| MT8 | VAD tests still pass after installing CTranslate2 (`python -m unittest tests.test_vad`) | ✅ 2026-11-01 Mac (user) |
+| MT9 | Short inputs (`eval/mt_short.txt`, `--scores`, split and `--whole`): what NLLB does with one-word and non-speech inputs, and whether the score tells invented text apart (D3b) | ✅ 2026-11-01 Mac: one-word input mostly invented; joined with a neighbour right (4/4); two long sentences together: one dropped; scores overlap |
+| MT10 | `make_pieces`: 11 cases (one-word sentence joins the next / the one before, long sentences stay apart, chains); 2000 random segments keep every word in order | ✅ 2026-11-01 test env |
+| MT11 | `is_non_speech`: `Հովհ.`, `«ովհ.`, `Հ։`, `Հ.`, `Ա։`, `Ձ։`, `։` → True; `Ու`, `Այո։`, `5`, `15։`, `Հովհ. Լավ։`, `Ես։`, `Կապ։` → False (`Է՞` alone → True: known cost) | ✅ 2026-11-01 test env |
+| MT12 | Glossary: whole-segment one word only, any punctuation / case / `և` (`Այո՜`, `Բարև։`, `Ի՞նչ։`); `translate()` = joined `translate_detailed()`; warm-up goes through NLLB | ✅ 2026-11-01 test env |
+| MT13 | Mac re-run of `eval/mt_short.txt` and `eval/mt_sentences.txt` with D3b: lines 26–29 of mt_short as in `--whole`; user checks the glossary English | ✅ 2026-11-01 Mac (`logs/mt_*_d3b.txt`): 26–29 identical to `--whole`, line 30 still split (both sentences kept); of the 5 BAD lines of mt_sentences, 3 now "Yes." / "Good luck." / skipped as non-speech, 2 unchanged (colloquial idiom, garbled ASR); times unchanged; glossary English checked by the user |
