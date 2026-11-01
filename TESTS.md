@@ -101,9 +101,9 @@ labels yet). They give early numbers for R7/E6, not the final checks (those need
 |---|---|---|
 | L1 | First Zoom call: Zoom's speaker was not "Call Output", so BlackHole stayed silent and the other side reached the program only through the room mic (all 33 phrases `Me`, badly recognised). The script now warns after 10 s of digital silence on BlackHole and in its summary | ✅ fixed 2026-11-01 (test env) |
 | L2 | 10.8 min Zoom call with routing fixed: 119 `Me` + 66 `Call` phrases, 0 over 5 s; latency p50 1.35 s, p95 3.38 s, max 3.76 s (ASR only) | ✅ 2026-11-01 Mac |
-| L3 | Where the time goes in L2: queue 0.00 s (p50), ASR 0.30 s; VAD hand-over `Call` 0.44 s but `Me` 1.97 s p50 / 3.32 s max (D2 "Found in live calls") | ⚠️ open for M5 |
+| L3 | Where the time goes in L2: queue 0.00 s (p50), ASR 0.30 s; VAD hand-over `Call` 0.44 s but `Me` 1.97 s p50 / 3.32 s max (D2 "Found in live calls"). Later calls, `Me` hand-over p50 / max: 0.54 / 0.78 s (`175249`, speakers), 0.81 / 2.11 s (`180632`), 0.55 / 1.22 s (`181818`, headphones), 1.85 / 2.27 s (`194323`); `Call` 0.35–0.41 s p50 in all | ⚠️ open for M5: varies between calls, cause not verified |
 | L4 | Ctrl+C: the phrase in progress is still printed, then the summary; second Ctrl+C aborts; silent mic, failed device, ASR crash, wrong / same device → clear error, exit ≠ 0 | ✅ test env (8 scenarios on real recordings) |
-| L5 | Live Zoom call with MT (`live_asr.py` + NLLB-600M): latency p50 / p95 / max incl. MT, 0 over 5 s?, English understandable?, non-speech skipped | ⬜ Mac |
+| L5 | Live Zoom call with MT (`live_asr.py` + NLLB-600M): latency p50 / p95 / max incl. MT, 0 over 5 s?, English understandable?, non-speech skipped | ✅ 2026-11-01 Mac, 0 over 5 s in all four logged calls (`logs/live_asr_20261101-*.csv`): `175249` speakers, 1.7 min, 30 printed, p50 1.22 / p95 2.08 / max 2.72 s; `180632` 9 min, 24 printed, 2.56 / 3.88 / 4.16 s (queue up to 2.8 s); `181818` headphones, 4 min, 46 printed, 1.17 / 1.96 / 2.06 s, 12 non-speech skipped; `194323` 6.7 min, 26 printed, 1.48 / 2.97 / 3.58 s, 5 skipped. MT per phrase median 0.35–0.88 s, max 1.34 s. English (user, chat 06): good on formal speech, bad on casual speech and on ASR mistakes (D3d) |
 
 ### mt (chats 05–06, MacBook Air M1)
 

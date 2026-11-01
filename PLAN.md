@@ -25,7 +25,7 @@ saving transcripts, non-Armenian input.
 
 - **Hardware:** MacBook Air **M1, 8 GB** unified memory, fanless (throttles under sustained load).
 - **Memory budget:** all models together ≤ ~3–3.5 GB (macOS + call app use the rest).
-- **Audio:** development on the MacBook Air mic + built-in speakers (echo out of scope); BlackHole 2ch + Multi-Output Device "Call Output"; call app unknown → setup must work for any app.
+- **Audio:** MacBook Air mic as input; the call is heard on headphones inside the Multi-Output Device "Call Output" (BlackHole 2ch + headphones), not on the MacBook speakers: with speakers every call phrase also came out as `Me` (D0, TESTS E6; echo handling is out of scope); call app unknown → setup must work for any app.
 - **Time:** ~20 h total, deadline one week from the brief (Oct 21, 2026).
 - **Repo:** never commit model weights, audio recordings or keys.
 
@@ -37,7 +37,7 @@ Mic ────────► Capture ─► VAD segmenter ─► label "Me" �
 BlackHole ──► Capture ─► VAD segmenter ─► Speaker identifier ─────┘
 ```
 
-Threads: 2 audio callbacks (copy only) · 2 segmenter threads · 1 worker (ASR + MT) · main thread (printer, Ctrl+C).
+Threads: 2 audio callbacks (copy only) · 2 audio worker threads (mono, 16 kHz, 512-sample chunks; one per `AudioCapture`, D7) · 1 worker (ASR + MT) · main thread (checks the other threads, Ctrl+C). The VAD `Segmenter` has no thread of its own (push-based, D6): whichever thread takes the chunks feeds it (`scripts/live_asr.py`: the main thread; `briefs/integration.md` plans one thread per source). Only one thread prints, so lines never mix (`live_asr.py`: the worker).
 Models are loaded once at start-up.
 
 **Core data object** (authoritative version: `transcriber/contracts.py`)
@@ -64,9 +64,9 @@ Shared types: `transcriber/contracts.py`; each module's interface is in its own 
 | # | Milestone | Done when | Est. |
 |---|---|---|---|
 | M0 ✅ | Environment + audio routing | Python env works; BlackHole + Multi-Output set up; level-meter script shows both inputs | 2 h |
-| M1 | Walking skeleton (mic only) | Speak Armenian → HY + EN lines appear in terminal | 3 h |
-| M2 | Two sources | Mic → `Me`, BlackHole → `Call` lines, in parallel | 2 h |
-| M3 | Eval set + measurement | CER/WER + latency per model; decide ASR decoder and NLLB size | 4 h |
+| M1 (✅ in `scripts/live_asr.py`) | Walking skeleton (mic only) | Speak Armenian → HY + EN lines appear in terminal | 3 h |
+| M2 (✅ in `scripts/live_asr.py`; `main.py` still to build) | Two sources | Mic → `Me`, BlackHole → `Call` lines, in parallel | 2 h |
+| M3 (partly: decoder D1a and NLLB size D3a decided on our recordings, rated by the user; CER/WER not yet) | Eval set + measurement | CER/WER + latency per model; decide ASR decoder and NLLB size | 4 h |
 | M4 | Speaker identification | 2+ call speakers get stable labels in a scripted call | 3 h |
 | M5 | Reliability | VAD tuned, long-phrase cap, queue latency under load, clear errors | 3 h |
 | M6 | README, chats export, rehearsal | Real call with 2+ people works end to end; README complete | 3 h |
@@ -77,11 +77,12 @@ Commit after every working step. One change at a time.
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| NeMo is heavy / awkward to install on macOS | Lost time | ONNX CTC route (`onnx-asr`) as tested alternative; decide in M3 |
-| 8 GB memory → swapping | Latency spikes | Measure RSS early; NLLB 600M if 1.3B is too heavy; int8 |
+| NeMo is heavy / awkward to install on macOS | Lost time | Happened without trouble: NeMo 3.0.0 in `.venv` (D1a); the lighter onnx-asr path (same text) is kept in chat 05 |
+| 8 GB memory → swapping | Latency spikes | Measured: ASR +1.37 GB, NLLB-600M int8 +1.07 GB, whole program ~2.7 GB (estimate, D3a); 600M chosen |
 | M1 Air throttles after minutes of load | Latency grows over time | Run 10-min soak test in M5 |
 | Conversational Armenian is hard (Movies WER ~61 % on ArmBench) | Visible errors live | Honest README; tune VAD so segments are whole phrases |
 | Both sides speak at once → queue wait | > 5 s | Measure p95 with overlap; keep models fast |
+| Slow mic-side hand-over in live calls (VAD waits ~2 s, D2) | Long mic phrases near 5 s | Cause not yet verified; it varies between calls (TESTS L3). Measure and fix in M5 |
 | Short phrases ("Այո") → weak speaker embeddings | Wrong / new labels | Minimum duration for creating a new speaker; tune threshold |
 | macOS Microphone permission missing | Silent zeros | Level-meter check in M0; startup check that fails loudly |
 | Whisper-style hallucination | Invented text | Chosen ASR is CTC/Transducer; VAD feeds speech only |
@@ -107,4 +108,4 @@ Commit after every working step. One change at a time.
 ## 9. Open questions
 
 - Exact call app for the interview (routing works for any app; confirm its speaker setting later).
-- Speakers vs headphones for the interview: decide after measuring echo (TESTS.md E6).
+- ~~Speakers vs headphones~~ decided 2026-11-01: headphones (D0, TESTS E6).

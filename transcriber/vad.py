@@ -71,8 +71,6 @@ class _SileroModel:
         return float(probability[0, 0])
 
 
-
-
 def _to_chunks(milliseconds: float) -> int:
     """A duration rounded to whole 32 ms chunks."""
     return round(milliseconds / 1000 / CHUNK_SECONDS)
@@ -108,8 +106,8 @@ class Segmenter:
                 chunk are dropped and counted in dropped_short.
 
     Segment.start/end are the times of the first/last sample of Segment.audio, so
-    end - start == len(audio) / SAMPLE_RATE. Defaults are starting values, tuned in
-    piece 4 (DECISIONS.md D2).
+    end - start == len(audio) / SAMPLE_RATE. The defaults were measured on our recordings;
+    every value and its reason: DECISIONS.md D2.
     """
 
     def __init__(self, source: str, *, threshold: float = 0.5, neg_threshold: float = 0.35,

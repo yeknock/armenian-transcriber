@@ -1,7 +1,8 @@
 # Brief — eval
 
 **Goal:** a small evaluation set and scripts that turn "seems good" into numbers (Tip 5):
-CER/WER for ASR and latency p50/p95/max. The numbers feed decisions D1a and D3a.
+CER/WER for ASR and latency p50/p95/max. D1a and D3a were already decided on our recordings, by the user's
+judgement and ratings (chats 05, 06); these numbers check those decisions and go into the README.
 
 **Read:** `MODULES.md` (Shared formats), `transcriber/asr.py`, `PLAN.md` §7, `DECISIONS.md` D1.
 

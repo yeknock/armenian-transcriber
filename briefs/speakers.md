@@ -18,8 +18,9 @@ label for the whole session (R5). Settle D4: SpeechBrain ECAPA vs NVIDIA TitaNet
 One embedding per segment, then cosine similarity to each speaker's centroid. The best match above the
 threshold joins that speaker and updates the centroid. Otherwise a new speaker is created, but only if the
 segment is long enough. Keep the matching logic separate from the embedding model, so
-`tests/test_speakers.py` can test it with made-up vectors. If D1a chose NeMo, TitaNet adds no new library;
-compare memory either way.
+`tests/test_speakers.py` can test it with made-up vectors. D1a chose NeMo, so TitaNet adds no new library;
+compare memory either way. Torch's thread count is process-wide and set by `Transcriber` (briefs/asr.md
+contract question 1).
 
 ## Test data
 Play an Armenian interview or podcast with 2–3 known voices to "Call Output" and record BlackHole with

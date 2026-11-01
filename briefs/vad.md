@@ -63,7 +63,7 @@ or convert any recording with `ffmpeg -i input.m4a -ar 16000 -ac 1 eval/audio/te
 - *integration:* one `Segmenter` per source; feed chunks in order (a gap raises). Call `flush()` at shutdown.
   `Segment.start` includes the 192 ms pre-roll, so the printed time is ~0.2 s before the first word.
   **Never `import silero_vad`** anywhere in the program: it switches torch to one thread for the whole process.
-  MODULES.md latency line says "silence needed to close it (~0.6 s)": measured 0.32 s (early cut 0.06 s, hard cut ≤ 1 s).
+  MODULES.md latency line says "silence needed to close it (~0.6 s)": measured 0.32 s (early cut 0.06 s, hard cut ≤ 1 s). (MODULES.md updated 2026-11-01.)
 - *asr:* segments are 0.6–10 s (≤ 9.98 s), start with ~192 ms of non-speech; call-side audio is quiet (peak 0.09–0.14).
 - *speakers:* two call-side people speaking back to back with no gap can end up in one segment (one label).
   Segments of long speech are cut into pieces of ~5–10 s, each labelled on its own.

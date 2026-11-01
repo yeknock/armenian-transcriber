@@ -4,7 +4,10 @@
 sources (M2). v2 adds reliability (M5) and the README and rehearsal (M6).
 
 **Read:** `MODULES.md`, `transcriber/contracts.py`, the module files (signatures and docstrings),
-the *Status* and *Contract questions* sections of every brief, `PLAN.md` §3, `DECISIONS.md` D5.
+the *Status* and *Contract questions* sections of every brief, `PLAN.md` §3, `DECISIONS.md` D5, and
+`scripts/live_asr.py`: it already runs mic + BlackHole → VAD → ASR → MT live (threads, queue, Ctrl+C, flush,
+non-speech skip, latency breakdown, routing warnings), so it is the working start for `pipeline.py` (briefs/asr.md,
+briefs/mt.md).
 
 **Owns:** `transcriber/contracts.py` (changes are logged in DECISIONS), `transcriber/pipeline.py`,
 `transcriber/output.py`, `main.py`, `README.md`, `.gitignore` (`logs/`), `TESTS.md` (requirements and edge cases).

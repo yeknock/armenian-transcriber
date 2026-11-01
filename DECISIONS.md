@@ -152,6 +152,9 @@ over p50 1.97 s / max 3.32 s after the end of its phrases, the call side 0.44 / 
 recordings). Likely cause, not yet verified: the room mic hears the other side through the speakers plus room noise,
 so its score stays in the unsure band (0.35–0.5) and the 512 ms silence wait starts late. Still under 5 s with ASR
 (total p95 3.38 s, max 3.76 s), but tight once translation is added → check in M5 (TESTS R7, briefs/integration.md).
+**Later calls with MT (2026-11-01, chat 06 and after; TESTS L3, L5):** mic-side hand-over p50 0.54 s (speakers, 1.7 min),
+0.81 s (9 min), 0.55 s (headphones, 4 min), 1.85 s (6.7 min, 19:43). So it is not always slow and the cause is still not
+verified; every call stayed under 5 s (max 4.16 s).
 
 ## D3 — Translation: NLLB-200 distilled (`hye_Armn → eng_Latn`) (2026-10-23) — Decided (size and beam: D3a; short inputs: D3b)
 **Why:** Built for low-resource languages; NLLB-3.3B scores spBLEU 43.0 / COMET-22 88.3 on
@@ -167,7 +170,7 @@ transformers 5.22.1 (installed with NeMo; tested on a tiny NLLB-type model, iden
 tokenizer with `src_lang="hye_Armn"`, target prefix `eng_Latn`, first output token dropped. Each segment is split
 into sentences first (`։` always; `. : ! ? …` before a space; `՞ ՜` sit inside words, so they never end a sentence),
 translated in one batch and joined in order, so no sentence can be dropped; 4 segments of our call logs already
-hold two or more sentences. Not yet measured on the real model.
+hold two or more sentences. Measured on the real model since: D3a.
 **ArmBench-LLM check (2026-11-01):** its Translation chart (100 short English↔Armenian sentences; direction and
 metric not stated) ranks general LLMs only, NLLB is not in it. The open models there do not fit an 8 GB Mac:
 gemma-4-31b (0.284; ~17.5 GB at 4-bit), GLM-5 (~744B MoE), GLM-4.7-Flash (30B-A3B: all 30B in memory), gemma-3-27b,
@@ -259,7 +262,7 @@ the user rates every changed line better / worse / same.
 
 ## D4 — Speaker embeddings (2026-10-23) — Open
 Candidates: SpeechBrain ECAPA-TDNN (`spkrec-ecapa-voxceleb`, Apache-2.0, 0.80 % EER VoxCeleb1)
-vs NVIDIA TitaNet (comes with NeMo if D1a picks NeMo). Speaker embeddings are largely
+vs NVIDIA TitaNet (comes with NeMo, which D1a chose: no new library). Speaker embeddings are largely
 language-independent; a 5-language zero-shot study found the two roughly equal.
 Method: online cosine matching against per-speaker centroids; mic side is always `Me`.
 Decide in M4.
@@ -268,6 +271,8 @@ Decide in M4.
 VAD → (speaker) → ASR → MT, one shared worker. Streaming ASR rejected: much more complex
 and not needed when the deadline is 5 s after the phrase ends. Joint speech-to-translation
 model rejected: no light enough option for Armenian on 8 GB, and less modular.
+**So far (2026-11-01):** `scripts/live_asr.py` runs this cascade without speakers (one worker: ASR, then MT) in live
+Zoom calls; every phrase stayed under 5 s (TESTS L2, L5). Decided only once speakers and the 10-min soak test are in.
 
 ## D6 — Module split and contracts (2026-10-24) — Decided
 Flat package `transcriber/`, one file per module (audio, vad, asr, mt, speakers) plus `pipeline.py`,

@@ -251,7 +251,9 @@ class Translator:
         to download/convert them. No network after the first download.
 
         model: one of MODELS (D3a: 600M). beam_size: 1 = greedy (D3a: rated as good as beam 2 on our lines and
-        23 % faster). threads: CPU threads for CTranslate2.
+        23 % faster). threads: CPU threads for CTranslate2. no_repeat_ngram_size, repetition_penalty: against
+        repetition loops (D3c, comment below). spoken_to_written: run to_written() on NLLB's input (D3d, off until
+        measured).
         """
         if model not in MODELS:
             raise ValueError(f"model must be one of {list(MODELS)}, got {model!r}")

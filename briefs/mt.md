@@ -3,7 +3,7 @@
 **Goal:** Armenian text → English with NLLB-200 distilled (`hye_Armn → eng_Latn`, D3), run locally with
 CTranslate2 int8, and settle D3a: 600M vs 1.3B.
 
-**Read:** `MODULES.md`, `transcriber/mt.py`, `DECISIONS.md` D0 and D3.
+**Read:** `MODULES.md`, `transcriber/mt.py`, `DECISIONS.md` D0 and D3 (now also D3a–D3d).
 
 **May edit:** `transcriber/mt.py`, `scripts/try_mt.py`, `eval/mt_sentences.txt`, `eval/mt_short.txt` (added in
 chat 06 for the short-input probe), `requirements.txt` (append),
@@ -11,7 +11,7 @@ chat 06 for the short-input probe), `requirements.txt` (append),
 
 ## Contract (signature in `transcriber/mt.py`)
 - `Translator()` loads once. If model files are missing it raises with the exact command that converts or downloads them.
-  Model files live outside the repo (`models/` is git-ignored).
+  Model files live in the repo's git-ignored `models/` folder (MODULES rule 6, changed 2026-11-01).
 - `translate(hy_text) -> str`: one segment may hold several sentences, and every sentence must show up in the
   English. `""` → `""`. Called from one worker thread. No network after the first download.
 
@@ -25,7 +25,7 @@ chat 06 for the short-input probe), `requirements.txt` (append),
 ```
 python -m scripts.try_mt eval/mt_sentences.txt
 ```
-`eval/mt_sentences.txt` (committed) holds ~20 Armenian lines typical of a call: greetings, questions,
+`eval/mt_sentences.txt` (committed) holds 29 Armenian lines typical of a call: greetings, questions,
 numbers, names, very short replies ("Այո"), one long sentence, and one line with two sentences.
 For each line the script prints HY, EN and the time, plus load time and RSS at the start.
 
@@ -37,14 +37,15 @@ For each line the script prints HY, EN and the time, plus load time and RSS at t
 - [x] D3a decided with these numbers — 600M, beam 1
 - [x] short inputs (D3b): probe `eval/mt_short.txt` run and a rule chosen — join one-word sentences, glossary,
   non-speech not printed
-- [ ] works with Wi-Fi off
+- [x] works with Wi-Fi off (TESTS MT7, user 2026-11-01)
 
 **Out of scope:** ASR, using context from earlier segments.
 
 ## Status
-**In progress (2026-11-01), started in chat `05-asr`, continued in chat `06-mt`.** NLLB-600M converted and measured
-on the Mac; D3a decided (600M, beam 1; numbers in DECISIONS). Open: short inputs (D3b), Wi-Fi-off check (MT7),
-VAD tests after the install (MT8).
+**Done (2026-11-01), started in chat `05-asr`, continued in chat `06-mt`.** NLLB-600M converted and measured on the
+Mac; D3a (600M, beam 1), D3b (short inputs), D3c (repetition) decided; Wi-Fi off (MT7) and VAD tests after the install
+(MT8) pass. Still open: D3d (spoken → written Armenian, built but off by default) until the user rates the changed
+lines (TESTS MT16). The notes below are in the order the work was done; the current state is the last of them.
 
 **The 5 s rule → MT's time budget (chat 06).** The worker does ASR, then MT, for one phrase at a time, so MT time
 adds to every phrase and also to the queue wait of the phrase behind it. Replay of the logged live calls
@@ -73,7 +74,9 @@ So the MODULES budget (≤ 0.8 s per segment) is not enough on its own in a busy
 - Licence CC-BY-NC: for the README.
 
 **What exists:**
-- `transcriber/mt.py`: `Translator(model="nllb-600m" | "nllb-1.3b", beam_size=2, threads=4)` loads
+- `transcriber/mt.py`: `Translator(model="nllb-600m" | "nllb-1.3b", beam_size=1, threads=4, no_repeat_ngram_size=4,
+  repetition_penalty=1.0, spoken_to_written=False)` (current defaults: beam 1 from D3a, the repetition settings from
+  D3c, the converter from D3d; the first version had beam 2 and only the first three arguments) loads
   `models/nllb_600m_ct2_int8` (or `_1.3b_`) with CTranslate2 int8 on the CPU; missing files → error with the exact
   conversion command; warm-up. `translate(text)`: splits into sentences (`split_sentences`: `։` always, `. : ! ? …`
   before a space; pieces without letters or digits are attached to the sentence before), translates them in one

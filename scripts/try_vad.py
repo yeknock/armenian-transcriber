@@ -24,7 +24,7 @@ from transcriber.vad import CHUNK_SECONDS, Segmenter, _SileroModel
 
 SEGMENTS_DIR = Path("eval/audio/segments")   # inside eval/audio/: git-ignored, never committed
 TUNING = ("threshold", "neg_threshold", "min_silence_ms", "pad_ms", "soft_max_s", "min_dip_ms",
-          "max_segment_s", "min_speech_ms")
+          "max_segment_s", "quiet_search_ms", "min_speech_ms")
 TIMELINE_WIDTH = 100                           # chunks per line = 3.2 s
 
 

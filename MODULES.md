@@ -14,10 +14,10 @@ BlackHole ─► audio ─► vad ─► speakers ──────────
 
 | Module | File | In | Out | Brief | Decision |
 |---|---|---|---|---|---|
-| audio | `transcriber/audio.py` | device name or id | `AudioChunk`s (32 ms, 16 kHz mono) on a queue | `briefs/audio.md` | — |
+| audio | `transcriber/audio.py` | device name or id | `AudioChunk`s (32 ms, 16 kHz mono) on a queue | `briefs/audio.md` | D7 |
 | vad | `transcriber/vad.py` | `AudioChunk`s of one source | `Segment` (start, end, audio) | `briefs/vad.md` | D2 |
 | asr | `transcriber/asr.py` | float32 16 kHz audio | Armenian text | `briefs/asr.md` | D1, D1a, D1b |
-| mt | `transcriber/mt.py` | Armenian text | English text | `briefs/mt.md` | D3a |
+| mt | `transcriber/mt.py` | Armenian text | English text | `briefs/mt.md` | D3, D3a–D3d |
 | speakers | `transcriber/speakers.py` | call-side segment audio | `"Speaker N"` | `briefs/speakers.md` | D4 |
 | eval | `eval/` | clips + reference texts + latency log | CER/WER, latency p50/p95/max | `briefs/eval.md` | — |
 | integration | `pipeline.py`, `output.py`, `main.py`, README | CLI flags | terminal lines | `briefs/integration.md` | D5 |
@@ -52,15 +52,17 @@ Each module file already holds its interface (signatures + docstrings, bodies ra
 
 | | Memory (RSS added) | Time per call |
 |---|---|---|
-| vad (×2, one per source) | ≤ 0.05 GB each | a few ms per chunk |
+| vad (×2, one per source) | ≤ 0.05 GB each (measured: ~53 MB both, D2) | a few ms per chunk (measured: 0.10 ms) |
 | speakers | ≤ 0.3 GB | ≤ 0.3 s per segment |
 | asr | ≤ 1.0 GB (measured: 1.37 GB, D1a) | ≤ 0.8 s for a 10 s segment (measured: 0.35 s) |
-| mt | ≤ 1.5 GB | ≤ 0.8 s per segment |
+| mt | ≤ 1.5 GB (measured: +1.07 GB, D3a) | ≤ 0.8 s per segment (measured: median line 0.26 s, longest line 1.23 s; proposed: median ≤ 0.5 s, longest ≤ 0.8 s, `briefs/mt.md`) |
 | Python, torch, buffers | ≤ 0.7 GB | — |
-| **Whole program** | **≤ ~3.5 GB** (8 GB Mac) | |
+| **Whole program** | **≤ ~3.5 GB** (8 GB Mac; estimate ~2.7 GB, D3a) | |
 
-Latency path for one phrase: silence needed to close it (~0.6 s) + speakers + asr + mt ≈ 2.5 s,
-which leaves ~2.5 s for waiting in the queue when both sides talk. Limit: 5 s.
+Latency path for one phrase: silence needed to close it (~0.6 s planned; 0.32 s measured on recordings, D2) + speakers +
+asr + mt ≈ 2.5 s, which leaves ~2.5 s for waiting in the queue when both sides talk. Limit: 5 s.
+Measured in live calls (`scripts/live_asr.py`, no speakers yet): the mic side's VAD hand-over is often much longer
+than on recordings (p50 up to ~2 s, D2, TESTS L3); with MT, max 2.1–4.2 s per call, 0 phrases over 5 s (TESTS L5).
 
 ## Shared formats
 
@@ -76,15 +78,15 @@ which leaves ~2.5 s for waiting in the queue when both sides talk. Limit: 5 s.
 Walking skeleton first (Tip 2): the first version of each module is the simplest one that meets the
 contract. Improvements come after the program runs end to end, aimed at the weakest measured link.
 
-| Step | Chat | Gives | Milestone |
+| Step | Chat | Gives | Milestone | Status (2026-11-01) |
 |---|---|---|---|
-| 1 | audio | capture + `scripts/record.py` to record test clips | M1 prep |
-| 2 | asr (biggest risk: NeMo on macOS) · mt in parallel (text only, needs no audio) | first working models | M1 prep |
-| 3 | vad | phrases from a stream | M1 prep |
-| 4 | integration v1 | mic only end to end, then both sources | M1, M2 |
-| 5 | eval | eval set + numbers → decide D1a, D3a | M3 |
-| 6 | speakers | stable call-side labels | M4 |
-| 7 | integration v2 | reliability, 10-min soak test, README, rehearsal | M5, M6 |
+| 1 | audio | capture + `scripts/record.py` to record test clips | M1 prep | done (chat 03) |
+| 2 | asr (biggest risk: NeMo on macOS) · mt in parallel (text only, needs no audio) | first working models | M1 prep | done (chats 05, 06; D3d open) |
+| 3 | vad | phrases from a stream | M1 prep | done (chat 04) |
+| 4 | integration v1 | mic only end to end, then both sources | M1, M2 | not started (`scripts/live_asr.py` already runs both sources end to end) |
+| 5 | eval | eval set + numbers → decide D1a, D3a | M3 | not started (D1a, D3a were decided on our recordings, rated by the user) |
+| 6 | speakers | stable call-side labels | M4 | not started |
+| 7 | integration v2 | reliability, 10-min soak test, README, rehearsal | M5, M6 | not started |
 
 Chats that touch different files can run at the same time in the same folder (`requirements.txt`: append only).
 

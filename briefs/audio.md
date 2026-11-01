@@ -82,3 +82,4 @@ The 1 % count limit is meant for the 60 s run: after a 2 s run, one chunk is alr
 2. **Shared docs to update (outside this chat's files):** `PLAN.md` §3 thread list — audio now has 2 callbacks
    **and 2 worker threads** (one per `AudioCapture`); the same line's "2 segmenter threads" already contradicts D6
    (push-based `Segmenter`, no threads). `MODULES.md` module table — audio's Decision column should be **D7**.
+   **Done 2026-11-01** (docs review): both updated.

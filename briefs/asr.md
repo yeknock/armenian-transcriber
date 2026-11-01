@@ -74,7 +74,8 @@ p95 3.38 s, max 3.76 s, 0 over 5 s.
 1. **`torch.set_num_threads(threads)` is process-wide.** Every torch model in the program (speakers) shares the
    setting made by `Transcriber`. Integration: set it once on purpose, and log it in DECISIONS.
 2. **Memory budget:** ASR uses +1.37 GB, not ≤ 1.0 GB (MODULES budgets). The whole-program target (~3.5 GB) still
-   looks reachable with NLLB-600M (~0.6 GB int8); to be measured in integration. The lighter onnx-asr path (+0.58 GB,
+   looks reachable with NLLB-600M (measured since: +1.07 GB, whole program ~2.7 GB estimate, D3a); to be measured
+   as a whole in integration. The lighter onnx-asr path (+0.58 GB,
    same text) is documented in D1a if needed.
 3. **`MAX_SECONDS = 20`** (the contract says ~0.3–15 s): the model was trained on 0.1–20 s; longer input raises.
 4. **Model files live in the repo's git-ignored `models/`** (decided with the user), not in a cache outside the repo

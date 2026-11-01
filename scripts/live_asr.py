@@ -189,9 +189,10 @@ def main() -> None:
         stop.set()
         signal.signal(signal.SIGINT, signal.default_int_handler)
 
-    def take(chunk) -> None:
-        now = time.monotonic() - session_start
-        max_lag[chunk.source] = max(max_lag[chunk.source], now - (chunk.start + CHUNK_SAMPLES / SAMPLE_RATE))
+    def take(chunk, measure_lag: bool = True) -> None:
+        if measure_lag:   # not for chunks drained after stop(): they waited during stop() (~0.25 s, D7)
+            now = time.monotonic() - session_start
+            max_lag[chunk.source] = max(max_lag[chunk.source], now - (chunk.start + CHUNK_SAMPLES / SAMPLE_RATE))
         for segment in segmenters[chunk.source].feed(chunk):
             worker.inbox.put((segment, time.monotonic() - session_start))
 
@@ -237,7 +238,7 @@ def main() -> None:
     print("\nStopping: finishing the last phrases...", flush=True)
     while True:                                   # audio that arrived before stop() still counts
         try:
-            take(chunks.get_nowait())
+            take(chunks.get_nowait(), measure_lag=False)
         except queue.Empty:
             break
     for segmenter in segmenters.values():
