@@ -3,3 +3,6 @@ sounddevice
 soxr
 silero-vad==6.2.3
 onnxruntime
+nemo_toolkit[asr]==3.0.0
+ctranslate2==4.8.4
+transformers

@@ -33,15 +33,49 @@ At start it prints load time and RSS. For each file it prints the text, the audi
 time and the real-time factor.
 
 ## Done when
-- [ ] Armenian text for ≥ 3 of our own recordings (mic + through BlackHole), checked by eye
-- [ ] load time, RSS and time for a 10 s clip in Status (targets: ≤ 1.0 GB, ≤ 0.8 s)
-- [ ] works with Wi-Fi off
-- [ ] D1a decided with numbers, or deferred to the eval chat with the numbers so far
+- [x] Armenian text for ≥ 3 of our own recordings (mic + through BlackHole), checked by eye — 4 recordings (18
+  segments) plus live Zoom calls; checked by the user
+- [x] load time, RSS and time for a 10 s clip in Status (targets: ≤ 1.0 GB, ≤ 0.8 s) — 9.8 s, **+1.37 GB (over)**, 0.35 s
+- [ ] works with Wi-Fi off (TESTS ASR6, still to run)
+- [x] D1a decided with numbers — RNNT head with NeMo (D1a); competitors checked (D1b)
 
 **Out of scope:** VAD, streaming ASR, translation.
 
 ## Status
-(not started)
+**Done except the Wi-Fi-off check (2026-11-01), chat `05-asr`** (the same chat also started the mt module).
+Commit: `asr: NeMo RNNT Transcriber, try_asr and live_asr checks` (not yet made at the time of writing).
+
+**What exists:**
+- `transcriber/asr.py`: `Transcriber(threads=4)` loads `models/nvidia_hy_nemo/*.nemo` with NeMo 3.0.0, RNNT head, CPU,
+  eval mode; warm-up on 1 s of silence. `transcribe(audio)` checks the input (1-D float32, finite, 0.1–20 s), gives
+  NeMo a copy (NeMo does not copy numpy arrays), returns the text stripped; a strange NeMo result raises.
+- `scripts/try_asr.py`: WAV files or folders of WAVs (e.g. the VAD's cuts) → text, length, time, RTF per file; load
+  time and peak memory; `--threads`, `--repeat`; stops if `transcribe()` changed its input.
+- `scripts/live_asr.py` (not in the *May edit* list; added on the user's request to test with real calls before the
+  full program exists): mic + BlackHole → VAD → ASR, prints time, `Me` / `Call`, Armenian and the delay split into
+  VAD + queue + ASR; Ctrl+C still finishes the last phrase; warns when the mic is digital silence (macOS permission)
+  or BlackHole is (call app not on "Call Output"); `--save` keeps every phrase as WAV + text in `logs/`.
+- `requirements.txt`: `nemo_toolkit[asr]==3.0.0`. Model files in `models/` (git-ignored); download command in the
+  error message. Everything else tried in this chat was removed (onnx-asr, three competitor models, the NeMo venv).
+
+**Measured on the M1:** see D1a, D1b and TESTS ASR1–ASR10, L1–L4. Live 10.8 min Zoom call (ASR only): 185 phrases,
+p95 3.38 s, max 3.76 s, 0 over 5 s.
+
+**Notes for other chats:**
+- *integration:* `scripts/live_asr.py` is a working start for `pipeline.py` (threads, queue, Ctrl+C, flush, delay
+  breakdown, routing checks): reuse or replace it. Load the ASR model **before** starting the audio (10 s; 68–97 s on
+  the first start after an install). Mic-side phrases were handed over ~2 s late in a real call (D2 "Found in live
+  calls"): measure again with translation in the loop (R7). Users must set the call app's speaker to "Call Output".
+- *mt:* the ASR ends sentences with `։` (262 in our logs), sometimes `.`; `՞ ՜` are inside words; one segment can hold
+  several sentences.
+- *speakers:* NeMo and torch are in `.venv` now, so TitaNet (D4) adds no new library.
 
 ## Contract questions
-(none)
+1. **`torch.set_num_threads(threads)` is process-wide.** Every torch model in the program (speakers) shares the
+   setting made by `Transcriber`. Integration: set it once on purpose, and log it in DECISIONS.
+2. **Memory budget:** ASR uses +1.37 GB, not ≤ 1.0 GB (MODULES budgets). The whole-program target (~3.5 GB) still
+   looks reachable with NLLB-600M (~0.6 GB int8); to be measured in integration. The lighter onnx-asr path (+0.58 GB,
+   same text) is documented in D1a if needed.
+3. **`MAX_SECONDS = 20`** (the contract says ~0.3–15 s): the model was trained on 0.1–20 s; longer input raises.
+4. **Model files live in the repo's git-ignored `models/`** (decided with the user), not in a cache outside the repo
+   as MODULES rule 6 first said; rule 6 was updated (2026-11-01).

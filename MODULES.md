@@ -16,7 +16,7 @@ BlackHole ─► audio ─► vad ─► speakers ──────────
 |---|---|---|---|---|---|
 | audio | `transcriber/audio.py` | device name or id | `AudioChunk`s (32 ms, 16 kHz mono) on a queue | `briefs/audio.md` | — |
 | vad | `transcriber/vad.py` | `AudioChunk`s of one source | `Segment` (start, end, audio) | `briefs/vad.md` | D2 |
-| asr | `transcriber/asr.py` | float32 16 kHz audio | Armenian text | `briefs/asr.md` | D1a |
+| asr | `transcriber/asr.py` | float32 16 kHz audio | Armenian text | `briefs/asr.md` | D1, D1a, D1b |
 | mt | `transcriber/mt.py` | Armenian text | English text | `briefs/mt.md` | D3a |
 | speakers | `transcriber/speakers.py` | call-side segment audio | `"Speaker N"` | `briefs/speakers.md` | D4 |
 | eval | `eval/` | clips + reference texts + latency log | CER/WER, latency p50/p95/max | `briefs/eval.md` | — |
@@ -36,8 +36,9 @@ Each module file already holds its interface (signatures + docstrings, bodies ra
 4. **Construction:** constructors work with their defaults (only `source`/`device`-type args are
    required), load models once, and raise if loading fails.
 5. **Fail loudly:** no silent fallbacks, no swallowed exceptions, no hidden retries or timeouts.
-6. **Local only:** models download once into a cache outside the repo; nothing is fetched at run time
-   (check with Wi-Fi off). Never commit weights or audio.
+6. **Local only:** models download once into the repo's git-ignored `models/` folder; nothing is fetched at run
+   time (check with Wi-Fi off). Never commit weights or audio. (Changed 2026-11-01, chat 05: was "a cache outside
+   the repo"; `models/` keeps every model next to the code and `.gitignore` already excludes it.)
 7. **One shared `.venv`:** add your packages to `requirements.txt`. Do not upgrade or downgrade a package
    another module uses (numpy, torch, …) without writing it into `DECISIONS.md`.
 8. **Run from the repo root:** `python -m scripts.try_asr` (so `import transcriber` works).
@@ -53,7 +54,7 @@ Each module file already holds its interface (signatures + docstrings, bodies ra
 |---|---|---|
 | vad (×2, one per source) | ≤ 0.05 GB each | a few ms per chunk |
 | speakers | ≤ 0.3 GB | ≤ 0.3 s per segment |
-| asr | ≤ 1.0 GB | ≤ 0.8 s for a 10 s segment |
+| asr | ≤ 1.0 GB (measured: 1.37 GB, D1a) | ≤ 0.8 s for a 10 s segment (measured: 0.35 s) |
 | mt | ≤ 1.5 GB | ≤ 0.8 s per segment |
 | Python, torch, buffers | ≤ 0.7 GB | — |
 | **Whole program** | **≤ ~3.5 GB** (8 GB Mac) | |

@@ -74,3 +74,32 @@ Result: ✅ pass · ❌ fail (+ note) · ⬜ not run
 | V12 | Listening: the 4 quiet hard cuts (`nonstop` 24.000 s, `call_interview` 9.792 / 25.280 / 34.656 s) fall between words; all segments of all 7 recordings sound right (short replies cut to just the word) | ✅ 2026-11-01 user |
 | V13 | Memory: both Segmenters ~53 MB, whole `try_vad` process 78–83 MB peak, torch not loaded (budget: ≤ 50 MB per Segmenter) | ✅ 2026-11-01 test env (Mac peak not recorded) |
 | V14 | No network: with networking switched off, all 24 tests pass and `try_vad` cuts as usual (MODULES rule 6) | ✅ 2026-11-01 test env |
+
+### asr (chat 05, MacBook Air M1)
+
+"Test env" = run by Claude without the real model (stand-ins for NeMo, tiny random models with the real libraries);
+"Mac" = run by the user. Segments = the VAD's cuts in `eval/audio/segments/`. Logs in `logs/` (git-ignored).
+
+| ID | Check | Result |
+|---|---|---|
+| ASR1 | `Transcriber()` loads `models/nvidia_hy_nemo/*.nemo` with NeMo (RNNT, CPU) and warms up; missing file → error with the download command | ✅ 2026-11-01 Mac + test env |
+| ASR2 | Load time and memory in `.venv` (budget ≤ 1.0 GB): 9.8 s (first start after install 68 s), +1.37 GB | ⚠️ 2026-11-01 Mac: over the budget (D1a) |
+| ASR3 | Time per segment (budget ≤ 0.8 s for 10 s): 0.27–0.35 s, 9.86 s segment 0.35 s, RTF 0.048 | ✅ 2026-11-01 Mac |
+| ASR4 | Armenian text for ≥ 3 recordings (mic + BlackHole), checked by eye: clean phrases right, names / casual speech often wrong | ✅ 2026-11-01 user |
+| ASR5 | NeMo vs onnx-asr: identical text on 18 segments, for both heads (letter for letter) | ✅ 2026-11-01 Mac |
+| ASR6 | Works with Wi-Fi off (NeMo installs telemetry libraries; its log says nothing is collected) | ⬜ |
+| ASR7 | Bad input → `ValueError` (not float32, not 1-D, < 0.1 s, > 20 s, NaN); the caller's array is never changed (also checked by `try_asr` on every file) | ✅ test env + Mac |
+| ASR8 | `.venv` run vs earlier NeMo run: same text on 11/11 segments | ✅ 2026-11-01 Mac |
+| ASR9 | VAD tests still pass after installing NeMo into `.venv` (`python -m unittest tests.test_vad`) | ⬜ |
+| ASR10 | Competitors on the same 11 segments (D1b): whisper-turbo-hy 2.58 s, seamless 2.68 s, whisper-large-hy 45.9 s median per segment vs nvidia 0.30 s; none better by the user's judgement | ✅ 2026-11-01 Mac |
+| ASR11 | Clean exit: once (2026-11-01) `try_asr` printed all results and its summary, then crashed with a segmentation fault while Python shut down; the next run exited cleanly. If it happens again: run with `python -X faulthandler ...` to see which library crashes (A–D in chat 05). Matters for E4 (clean Ctrl+C) | ⚠️ seen once, not reproduced |
+
+**Live checks with `scripts/live_asr.py`** (mic + BlackHole → VAD → ASR, Armenian only; no translation, no speaker
+labels yet). They give early numbers for R7/E6, not the final checks (those need the full program):
+
+| ID | Check | Result |
+|---|---|---|
+| L1 | First Zoom call: Zoom's speaker was not "Call Output", so BlackHole stayed silent and the other side reached the program only through the room mic (all 33 phrases `Me`, badly recognised). The script now warns after 10 s of digital silence on BlackHole and in its summary | ✅ fixed 2026-11-01 (test env) |
+| L2 | 10.8 min Zoom call with routing fixed: 119 `Me` + 66 `Call` phrases, 0 over 5 s; latency p50 1.35 s, p95 3.38 s, max 3.76 s (ASR only) | ✅ 2026-11-01 Mac |
+| L3 | Where the time goes in L2: queue 0.00 s (p50), ASR 0.30 s; VAD hand-over `Call` 0.44 s but `Me` 1.97 s p50 / 3.32 s max (D2 "Found in live calls") | ⚠️ open for M5 |
+| L4 | Ctrl+C: the phrase in progress is still printed, then the summary; second Ctrl+C aborts; silent mic, failed device, ASR crash, wrong / same device → clear error, exit ≠ 0 | ✅ test env (8 scenarios on real recordings) |

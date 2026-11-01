@@ -39,12 +39,72 @@ Trained on 296 h of Armenian (Common Voice 17, FLEURS, audiobooks, proprietary c
 - omniASR (all sizes), MMS — much higher WER.
 - Cloud models (ranks #1–10) — forbidden by the brief.
 
-**Known risk:** conversational speech is hard (Movies 60.78 WER) → expect errors in live calls.
-**Sub-decision still open (D1a):** Transducer decoder (NeMo) vs CTC decoder (ONNX, `onnx-asr`).
-Decide in M3 by CER/WER + speed on our own clips.
+**Known risk:** conversational speech is hard (Movies 60.78 WER) → expect errors in live calls. Confirmed in the
+first live calls (2026-11-01): clean phrases and rare words right, names and casual speech often wrong.
+**D1a decided (2026-11-01):** RNNT head, run with NeMo (see D1a). **D1b (2026-11-01):** checked live against the
+next three open models on ArmBench-ASR; NVIDIA kept (see D1b).
 **Offline comparison only:** BuzzASR/armenian (not on ArmBench; 1.55B, too heavy for live use).
 
 Sources: ArmBench-ASR leaderboard (Metric AI Lab); NVIDIA model card.
+
+## D1a — ASR decoder and runtime: RNNT head, NeMo 3.0.0 on the CPU, in the project `.venv` (2026-11-01) — Decided
+**The model** (read from `model_config.yaml` inside the `.nemo`): 80 log-mel bands every 10 ms, normalised per band →
+FastConformer encoder (8× subsampling = one frame per 80 ms, 17 blocks, 512 wide, full attention over the segment,
+so it needs whole phrases: fits the VAD) → two heads trained together (loss 0.7 RNNT + 0.3 CTC). CTC = one linear
+layer, every frame decided alone. RNNT = LSTM prediction net (640) that reads the tokens already written + joint
+net, ≤ 10 tokens per frame. 1024 SentencePiece tokens + blank. Trained on clips of 0.1–20 s.
+**Decoder: RNNT.** On 18 VAD segments of our recordings (test_mic, five_phrases, call_speech, call_interview) RNNT
+was better by eye: CTC doubles or merges letters («Մեկ,եր», «վվեց», «ընթացքումթաց», «ողանվագ» for «ողբանվագ»).
+Model card: RNNT 9.90 / 12.32 WER vs CTC 11.19 / 13.23 (Common Voice 17 / FLEURS). RNNT costs ~10 % more time.
+**Runtime: NeMo, chosen by the user; onnx-asr gave the same text.** Both runtimes produced identical text on all 18
+segments, for both heads (letter for letter), so the ONNX files are faithful (OpenVoiceOS CTC export; RNNT head
+exported by us with NeMo; their `vocab.txt` files are identical). Measured on the M1:
+
+| Runtime, head | 9.86 s segment | 18 segments (99.3 s) | RSS added | Load (2nd start) |
+|---|---|---|---|---|
+| **NeMo, RNNT (chosen)** | **0.33 s** | **5.18 s** | **+1.31 GB** | **10 s** (first start after install 68–97 s) |
+| NeMo, CTC | 0.29 s | 4.77 s | (same model) | |
+| onnx-asr 0.12.0, RNNT | 0.22 s | 2.02 s | +0.58 GB | 1.0 s |
+| onnx-asr 0.12.0, CTC | 0.12 s | 1.27 s | +0.74 GB | 1.4 s |
+
+Honest trade-off: onnx-asr was 1.5–7× faster and used half the memory for the same text, and needs no torch. NeMo
+was kept as the one runtime of the project (the checkpoint's own toolkit, no conversion step, one shared `.venv`;
+the separate NeMo venv used for the comparison was removed). Cost: ASR adds ~1.37 GB (MODULES budget: 1.0 GB) and
+NeMo brings ~90 packages. If memory gets tight in integration, the onnx-asr path (code and RNNT export) is in
+chat 05.
+**In `.venv`** (11 VAD segments of test_mic + call_interview): load 9.8 s, +1.37 GB, 0.27–0.35 s per segment (RTF
+0.048); text identical to the earlier NeMo run (11/11).
+**Install (rule 7):** `nemo_toolkit[asr]==3.0.0` in `.venv`; a dry run showed numpy 2.5.4, torch 2.15.0 and onnxruntime
+unchanged; NeMo's dependencies pin `packaging` 24.2 and `fsspec` 2025.12.0 (not used by our modules). NeMo also
+installs telemetry libraries (wandb, opentelemetry, nv-one-logger); its log says no telemetry is collected; the
+Wi-Fi-off check is still open (TESTS ASR6).
+**Settings:** CPU (4 torch threads; `torch.set_num_threads` is process-wide, see briefs/asr.md), eval mode (no dither,
+no dropout: same audio → same text), warm-up on 1 s of silence at load, input copied before NeMo (it wraps numpy
+arrays without copying), input checks: 1-D float32, finite, 0.1–20 s.
+**Rejected:** onnx-asr (above); CTC (more errors); NeMo in its own venv (two environments for one project).
+
+## D1b — Live check against the next three open ASR models (2026-11-01) — Decided: keep NVIDIA
+The user asked to test the best competitors on our own audio before going on. ArmBench-ASR (checked 2026-11-01)
+still ranks NVIDIA first among open models (Combined WER 19.86); next: `facebook/seamless-m4t-v2-large` 28.94,
+`Chillarmo/whisper-large-v3-turbo-armenian` 33.00, `arampacha/whisper-large-hy-2` 33.17 (Movies, the closest to a
+call: 80.16 / 82.01 / 77.82 vs 60.78). All three were run with transformers 5.22.1 on the Apple GPU (float16) on the
+same 11 VAD segments:
+
+| Model | Params | Per segment, median / max | RSS added | Load |
+|---|---|---|---|---|
+| **nvidia (NeMo, RNNT)** | 0.1B | **0.30 / 0.35 s** | +1.37 GB | 9.8 s |
+| whisper-turbo-hy | 0.8B | 2.58 / 2.87 s | +1.53 GB | 14.5 s |
+| whisper-large-hy | 1.5B | 45.9 / 84.4 s | +2.60 GB | 37.3 s |
+| seamless-m4t-v2-large | 2.3B | 2.68 / 3.64 s | +3.21 GB | 18.2 s |
+
+**Result (the user judged the Armenian):** none better overall. Whisper models: misspellings, split words, invented
+dashes and ellipses («Տաս նմեկ տաս ներկու…»); whisper-large is unusable for live (RTF 7.2). Seamless: fluent, but
+rewrites into literary Armenian and repeats itself (call_interview/03: «ծխի հոտը չի գալիս» three times), i.e.
+invents text, and needs 3.2 GB. Turbo and Seamless are 8–10× slower than NVIDIA: with translation added they would
+use most of the 5 s. All three models were deleted and their code removed (it is in chat 05).
+Met on the way (recorded so they are not repeated): the installed `hf` CLI takes only the first pattern after
+`--include` (files must be named one by one); `arampacha/whisper-large-hy-2` has only `pytorch_model.bin` on its main
+branch; 2022 Whisper fine-tunes lack the language tables new transformers needs for `language="hy"`.
 
 ## D2 — VAD: Silero VAD 6.2.3 run directly with onnxruntime + own segmenter rules (2026-11-01) — Decided
 **Model:** `silero-vad==6.2.3` (MIT; the 2.3 MB `silero_vad.onnx` ships inside the pip package, nothing is downloaded
@@ -86,6 +146,11 @@ hard cut. **Cost:** 0.10 ms per `feed()` on the M1 (max 0.41 ms); 18–30 ms to 
 **Known limits:** an early cut keeps only ~32 ms after the speech (not 192 ms), so a last sound could be clipped; the
 quietest chunk can still be a consonant closure; two call-side people speaking back to back without a gap end up in one
 segment (speakers module); webrtcvad rejected (older, worse on noise).
+**Found in live calls (2026-11-01, chat 05, `scripts/live_asr.py`):** in a 10.8 min Zoom call the mic side was handed
+over p50 1.97 s / max 3.32 s after the end of its phrases, the call side 0.44 / 0.51 s (the 0.32 s measured on
+recordings). Likely cause, not yet verified: the room mic hears the other side through the speakers plus room noise,
+so its score stays in the unsure band (0.35–0.5) and the 512 ms silence wait starts late. Still under 5 s with ASR
+(total p95 3.38 s, max 3.76 s), but tight once translation is added → check in M5 (TESTS R7, briefs/integration.md).
 
 ## D3 — Translation: NLLB-200 distilled (`hye_Armn → eng_Latn`) (2026-10-23) — Tentative
 **Why:** Built for low-resource languages; NLLB-3.3B scores spBLEU 43.0 / COMET-22 88.3 on
@@ -94,6 +159,19 @@ FLORES-200 hye→en, above GPT-4 few-shot (35.6 / 86.2). Runs locally with CTran
 (slower, heavier, variable Armenian quality); 3.3B (too heavy for 8 GB).
 **Open (D3a):** 600M vs 1.3B — decide in M3 by speed + manual quality rating.
 **Licence note:** CC-BY-NC (research use) — acceptable for the challenge, stated in README.
+**Progress (2026-11-01, chat 05):** CTranslate2 4.8.4 (macOS arm64 wheel; needs only numpy and pyyaml). Conversion
+from Meta's checkpoint with `ct2-transformers-converter --quantization int8 --low_cpu_mem_usage` works with
+transformers 5.22.1 (installed with NeMo; tested on a tiny NLLB-type model, identical output with and without
+`--low_cpu_mem_usage`, which keeps the 5.5 GB 1.3B original from exhausting 8 GB). Recipe from the CTranslate2 docs:
+tokenizer with `src_lang="hye_Armn"`, target prefix `eng_Latn`, first output token dropped. Each segment is split
+into sentences first (`։` always; `. : ! ? …` before a space; `՞ ՜` sit inside words, so they never end a sentence),
+translated in one batch and joined in order, so no sentence can be dropped; 4 segments of our call logs already
+hold two or more sentences. Not yet measured on the real model.
+**ArmBench-LLM check (2026-11-01):** its Translation chart (100 short English↔Armenian sentences; direction and
+metric not stated) ranks general LLMs only, NLLB is not in it. The open models there do not fit an 8 GB Mac:
+gemma-4-31b (0.284; ~17.5 GB at 4-bit), GLM-5 (~744B MoE), GLM-4.7-Flash (30B-A3B: all 30B in memory), gemma-3-27b,
+Mistral 24B and up. gemma-3-4b would fit (~3 GB at 4-bit, estimate) but scores lowest (0.082), is twice the 1.5 GB
+MT budget, and an LLM writes word by word (estimated 1–2 s per phrase vs 0.8 s). → NLLB stays.
 
 ## D4 — Speaker embeddings (2026-10-23) — Open
 Candidates: SpeechBrain ECAPA-TDNN (`spkrec-ecapa-voxceleb`, Apache-2.0, 0.80 % EER VoxCeleb1)
