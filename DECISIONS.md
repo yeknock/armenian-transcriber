@@ -208,7 +208,7 @@ gemma-4-31b (0.284; ~17.5 GB at 4-bit), GLM-5 (~744B MoE), GLM-4.7-Flash (30B-A3
 Mistral 24B and up. gemma-3-4b would fit (~3 GB at 4-bit, estimate) but scores lowest (0.082), is twice the 1.5 GB
 MT budget, and an LLM writes word by word (estimated 1–2 s per phrase vs 0.8 s). → NLLB stays.
 
-## D3a — NLLB-200-distilled-600M, CTranslate2 int8, greedy decoding (beam 1) (2026-11-01, chat 06) — Decided
+## D3a — NLLB-200 distilled, CTranslate2 int8, greedy decoding (beam 1) (2026-11-01, chat 06) — Decided: 600M first, 1.3B the default since 2026-11-01 (below)
 **Size: 600M, the user's decision.** 1.3B was not tried: it needs ~2× the memory and time on an 8 GB fanless M1
 that already holds the ASR (+1.37 GB). Revisit only if 600M is not good enough in the live tests.
 **Beam: 1.** Both run on the 29 lines of `eval/mt_sentences.txt` (`--repeat 3`), each line rated by the user:
@@ -292,7 +292,7 @@ Armenian («ջահել ժամանակ» → "in the Holocaust", «վաբշ» →
 `SPOKEN_PHRASES` (3, e.g. «ինչ կա չկա» → «ինչ նորություն կա»), `SPOKEN_QUESTIONS` (19, keyed by the word without ՞,
 so the mark can be anywhere: «ո՞նց» → «ինչպե՞ս», «ինչի՞» → «ինչո՞ւ»), `SPOKEN_TO_WRITTEN` (88 words), «չի» → «չէ» at a
 clause end. Words with a colliding written meaning are left out (իրան, արա, մենակ, կանգնի, սպասի, ինչի without ՞,
-էլի, …). Kept although it can collide: «կարում» (also "sews"). Off by default (`spoken_to_written=False`) until measured.
+էլի, …). Kept although it can collide: «կարում» (also "sews"). Off by default (`spoken_to_written=False`) until measured — on since 2026-11-01 (below).
 Also widened at the user's request: `ONE_WORD` 18 → 60 (with ՞ the English ends in "?": «Այո՞» → "Yes?"),
 `NON_SPEECH_WORDS` + hesitation sounds; `lookup_key()` collapses repeated letters («Հաաա» → հա, «ըըը» → ը), and a
 segment is non-speech when every word is a single letter or a hum («Հ. Հմ։»).
@@ -315,7 +315,7 @@ Decide in M4.
 23M parameters, 192-number fingerprint, 16 kHz mono, 0.66 % EER VoxCeleb1, CC-BY-4.0; trained on English incl.
 telephone speech) through NeMo's `infer_segment` — no new library. `SpeakerMatcher`: mean direction per speaker,
 cosine >= threshold joins, else a new speaker only if the phrase is >= min_new_s; shorter phrases take the closest
-speaker and never change one; first phrase = Speaker 1. **Starting values 0.5 / 1.0 s, not measured yet:** the user
+speaker and never change one; first phrase = Speaker 1. **Starting values 0.5 / 1.0 s, not measured yet (replaced below by 0.45 / 2.0 s):** the user
 chose to finish the program end to end first (2026-11-01). To tune: fill `eval/speakers/spk_two.txt` (2-voice podcast,
 45 phrases) and run `scripts/try_speakers.py` (threshold x length table). ECAPA stays the fallback.
 **Failed live, then measured (2026-11-01):** a Zoom call with 3 people on the call side (VAD 8 / 15 s) gave 12 call-side
@@ -328,7 +328,9 @@ found 2 speakers here, 100 % in the right group, so the podcast alone does not d
 **Chosen: threshold 0.45** (middle of 0.35 … 0.66, ~0.1 margin both ways for worse call audio), **min_new_s 2.0 s**
 (short phrases never start or change a speaker), and a short **first** phrase no longer founds Speaker 1 (it is
 labelled 1 but the first phrase ≥ 2 s sets the fingerprint) — in the live call the 2.0 s first phrase founded a
-Speaker 1 that nothing matched again. Still to check: a live call with 3 call-side people (R5b, R5c).
+Speaker 1 that nothing matched again. **Live check (2026-11-01 23:22, 6.3 min, 3 people on the call side):** 38 call-side
+phrases → 3 speakers (33 / 1 / 4), latency max 4.64 s, 0 over 5 s (TESTS SP6). Not verified: which person each phrase
+really was.
 
 ## D5 — Architecture: cascade, segment-based (2026-10-23) — Tentative
 VAD → (speaker) → ASR → MT, one shared worker. Streaming ASR rejected: much more complex

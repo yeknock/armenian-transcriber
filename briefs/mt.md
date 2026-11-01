@@ -44,8 +44,8 @@ For each line the script prints HY, EN and the time, plus load time and RSS at t
 ## Status
 **Done (2026-11-01), started in chat `05-asr`, continued in chat `06-mt`.** NLLB-600M converted and measured on the
 Mac; D3a (600M, beam 1), D3b (short inputs), D3c (repetition) decided; Wi-Fi off (MT7) and VAD tests after the install
-(MT8) pass. Still open: D3d (spoken → written Armenian, built but off by default) until the user rates the changed
-lines (TESTS MT16). The notes below are in the order the work was done; the current state is the last of them.
+(MT8) pass. D3d (spoken → written Armenian) measured and on by default since 2026-11-01, together with NLLB-1.3B as
+the default model (D3a, TESTS MT16–MT17). The notes below are in the order the work was done; the current state is the last of them.
 
 **The 5 s rule → MT's time budget (chat 06).** The worker does ASR, then MT, for one phrase at a time, so MT time
 adds to every phrase and also to the queue wait of the phrase behind it. Replay of the logged live calls

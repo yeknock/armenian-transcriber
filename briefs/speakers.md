@@ -42,7 +42,7 @@ mapping of labels, the number of speakers found, and the time per segment.
 **Out of scope:** names, remembering speakers across sessions, overlapping speech (write it down as a limitation).
 
 ## Status
-**Built, not tuned (2026-11-01).** `transcriber/speakers.py` (`SpeakerMatcher`, TitaNet wrapper,
+**Done (2026-11-01): built, then tuned after a failed live call (threshold 0.45, new speakers only from phrases ≥ 2 s, a short first phrase founds nothing; D4, TESTS SP4–SP6).** `transcriber/speakers.py` (`SpeakerMatcher`, TitaNet wrapper,
 `SpeakerIdentifier`, `speakers_found`), `tests/test_speakers.py` (11 tests; 6 planted bugs all caught after two
 tests were fixed), `scripts/try_speakers.py` (fingerprints once, cached in `logs/`, then a threshold x min_new_s
 accuracy table against a turns file). Short phrases: never start or change a speaker, take the closest one (D4).

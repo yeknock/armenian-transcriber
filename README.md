@@ -47,9 +47,9 @@ full AI chat history — is part of the result; see [How this was built](#how-th
 | Capture the microphone and the system audio (the call) at the same time; user picks the devices | ✅ `--list-devices`, `--mic`, `--call` (device name or id) |
 | Armenian speech → Armenian text | ✅ NVIDIA FastConformer (CER 8.8 %, WER 26.7 % on our own spontaneous recordings) |
 | Translate every segment into English | ✅ NLLB-200 1.3B with a spoken→written Armenian word list (600M with `--mt-model nllb-600m`) |
-| Mic = `Me`; call side = `Speaker 1, 2, …`, stable for the session | ✅ `Me` always right. ⚠️ Call-side labels: tuned on a 2-voice podcast (right 2 speakers) after a live call gave 7 labels for 3 people; not yet re-checked live (see [limitations](#known-limitations)) |
+| Mic = `Me`; call side = `Speaker 1, 2, …`, stable for the session | ✅ `Me` always right. ⚠️ Call-side labels: tuned on a 2-voice podcast after a live call gave 7 labels for 3 people; the next 6-minute call with 3 people found 3 (whether every phrase went to the right person was not checked; see [limitations](#known-limitations)) |
 | Live terminal output: time, speaker, Armenian, English | ✅ |
-| At most 5 s from the end of a phrase to its English line | ✅ measured in live calls: 0 phrases over 5 s (max 3.76 s with 1.3B, 2.62 s with 600M) |
+| At most 5 s from the end of a phrase to its English line | ✅ measured in live calls: 0 phrases over 5 s; the longest run with the final settings (6.3 min, 81 entries) peaked at 4.64 s |
 | Local models only, Python, runs on my own laptop | ✅ MacBook Air M1, 8 GB, macOS, Python 3.12 |
 | README: setup, models and alternatives, architecture, limitations | ✅ this file |
 | Full AI chat transcripts in `chats/` | ⚠️ one Markdown file per session; for sessions 04–06 the app's export did not work, so those files are handovers, and the original chats are in the app (see [How this was built](#how-this-was-built)) |
@@ -230,7 +230,7 @@ before being wired together (see [`MODULES.md`](MODULES.md)).
 | audio | `audio.py` | device → 32 ms chunks, 16 kHz mono | One `sounddevice` stream per device. The audio callback only copies each block; a worker thread mixes to mono, resamples to 16 kHz with a streaming resampler (`soxr`, no clicks at block borders) and cuts exact 512-sample chunks. Timestamps are counted from samples, so they don't drift. D7 |
 | VAD | `vad.py` | chunks → phrases | Silero VAD scores each chunk. A phrase starts at speech (with 192 ms before it, so the first syllable is kept) and ends after 512 ms of silence. Long speech is cut early: after 5 s at the first short dip, at 10 s at the quietest point. Silence and noise never reach the models. D2 |
 | ASR | `asr.py` | audio → Armenian text | NVIDIA FastConformer, RNNT decoder, with punctuation. ~0.3 s per phrase. D1, D1a |
-| speakers | `speakers.py` | call-side audio → `Speaker N` | TitaNet turns a phrase into a 192-number "voice fingerprint"; it joins the most similar known speaker if similar enough, else starts a new one (only phrases ≥ 1 s may do that). The mic side is `Me` without any analysis. D4 |
+| speakers | `speakers.py` | call-side audio → `Speaker N` | TitaNet turns a phrase into a 192-number "voice fingerprint"; it joins the most similar known speaker if similar enough, else starts a new one (only phrases ≥ 2 s may do that; threshold 0.45, measured). The mic side is `Me` without any analysis. D4 |
 | MT | `mt.py` | Armenian → English | NLLB-200 with CTranslate2 (int8). Each phrase is split into sentences, which are translated together and joined, so no sentence is lost. Rules for known weak spots: one-word replies from a small glossary, coughs not printed, no repetition loops. D3–D3c |
 | pipeline | `pipeline.py` | — | Wires it all: the main thread feeds both VADs and checks every thread; one worker runs ASR → speaker → MT → print for one phrase at a time. |
 | output | `output.py` | — | The entry layout shown at the top. |
@@ -315,8 +315,8 @@ uses, so it adds no library. SpeechBrain ECAPA (0.80 % EER) is the alternative i
 The matching rule was tuned after it failed in a live call (7 "speakers" for 3 people): on real fingerprints of a
 2-voice podcast, phrases of 2 s or more match their own speaker at ≥ 0.66 and the other at ≤ 0.35, while shorter
 phrases are unreliable (own-speaker similarity down to 0.04). So: **threshold 0.45**, and only phrases **≥ 2 s** may
-start or change a speaker (shorter ones take the closest label). That finds the right 2 speakers on the podcast; a
-live call with 3 people on the call side is the next check.
+start or change a speaker (shorter ones take the closest label). That finds the right 2 speakers on the podcast, and
+in a 6-minute live call with 3 people on the call side it found 3 (instead of 7 before).
 
 ---
 
@@ -329,6 +329,7 @@ All on the MacBook Air M1, 8 GB, 2026-11-01. Sources: [`TESTS.md`](TESTS.md), [`
 | Run | Phrases | p50 | max | Over 5 s |
 |---|---|---|---|---|
 | `main.py`, 600M, headphones, 2 min | 25 | 1.62 s | 2.62 s | 0 |
+| **`main.py`, final defaults, Zoom call with 3 people on the call side, 6.3 min** | **81** | **1.93 s** (p95 4.23 s) | **4.64 s** | **0** |
 | `main.py`, 1.3B, YouTube podcast + own voice, 2.7 min | 18 | 2.77 s | 3.76 s | 0 |
 | `live_asr.py` (no speakers), 10.8 min Zoom call, ASR only | 185 | 1.35 s | 3.76 s | 0 |
 | `live_asr.py` with MT (600M), 9 min call | 24 | 2.56 s | 4.16 s | 0 |
@@ -344,8 +345,9 @@ with 1.3B (~3 GB with 600M).
 
 **Time per phrase:** ASR 0.27–0.40 s, speaker 0.18–0.25 s (median), translation 0.74 s (1.3B) / 0.37 s (600M) median.
 
-*Note:* the live runs and the replay in this section were made **before** the word list became the default; the 1.3B
-run is the only one with today's translation model. A long call with the final defaults is still to do (R7a).
+*Note:* only the first row uses the final defaults (NLLB-1.3B + word list, VAD 5 / 10 s, tuned speakers); the others
+were earlier set-ups. With 1.3B the slowest phrase came within 0.4 s of the limit (4.64 s); a 10-minute run is still
+to do (R7a).
 
 ---
 
@@ -360,7 +362,8 @@ Honest list; most are measured, see TESTS / DECISIONS.
   while being wrong.
 - **Call-side speaker labels are tuned on one recording only.** With the first, untuned settings a live call with 3
   people on the call side gave 7 labels. The settings now come from a 2-voice podcast (right 2 speakers, every phrase
-  in the right group), but call audio is more compressed and voices can be more alike; a new live check is needed.
+  in the right group); a 6-minute call with 3 people on the call side then found 3 speakers, but whether every phrase
+  went to the right person was not checked.
   Two people talking back to back with no pause can land in one phrase (one label); overlapping speech is not handled;
   a person who only ever says short phrases (< 2 s) never gets a label of their own.
 - **Short phrases:** a one-word phrase gets no new speaker (its fingerprint is weak) and joins the closest one. A real
