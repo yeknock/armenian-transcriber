@@ -84,7 +84,7 @@ contract. Improvements come after the program runs end to end, aimed at the weak
 | 2 | asr (biggest risk: NeMo on macOS) · mt in parallel (text only, needs no audio) | first working models | M1 prep | done (chats 05, 06; D3d open) |
 | 3 | vad | phrases from a stream | M1 prep | done (chat 04) |
 | 4 | integration v1 | mic only end to end, then both sources | M1, M2 | not started (`scripts/live_asr.py` already runs both sources end to end) |
-| 5 | eval | eval set + numbers → decide D1a, D3a | M3 | not started (D1a, D3a were decided on our recordings, rated by the user) |
+| 5 | eval | eval set + numbers → decide D1a, D3a | M3 | started: `eval/metrics.py`, `eval/run_asr.py`, 3 clips in `eval/real/` (TESTS EV1–EV4) |
 | 6 | speakers | stable call-side labels | M4 | not started |
 | 7 | integration v2 | reliability, 10-min soak test, README, rehearsal | M5, M6 | not started |
 

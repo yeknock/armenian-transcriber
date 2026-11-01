@@ -83,6 +83,13 @@ Wi-Fi-off check is still open (TESTS ASR6).
 no dropout: same audio → same text), warm-up on 1 s of silence at load, input copied before NeMo (it wraps numpy
 arrays without copying), input checks: 1-D float32, finite, 0.1–20 s.
 **Rejected:** onnx-asr (above); CTC (more errors); NeMo in its own venv (two environments for one project).
+**Beam search measured (2026-11-01, `eval/run_asr.py` on `eval/real`: 3 spontaneous mic clips, 121 s, 191 reference
+words, references typed by the user; TESTS EV3):** NeMo `malsd_batch`, beam 4, vs greedy: WER 26.7 → 26.2 %, CER
+8.8 → 8.8 % — one phrase changed («էն օգնեմ» → «ելույթն եմ», still wrong for «Ենոքն եմ») — while ASR time per phrase
+went from 0.27 / 0.37 s (median / max) to 0.62 / 0.98 s. **Rejected: greedy stays.** The model is already sure of its
+choices; its errors are names, rare and casual words. `Transcriber(beam_size=...)` stays as an option (default 1). The
+setting the checkpoint stores, `return_best_hypothesis: false`, would make beam search return every candidate, so the
+option sets it to true.
 
 ## D1b — Live check against the next three open ASR models (2026-11-01) — Decided: keep NVIDIA
 The user asked to test the best competitors on our own audio before going on. ArmBench-ASR (checked 2026-11-01)
@@ -147,6 +154,18 @@ hard cut. **Cost:** 0.10 ms per `feed()` on the M1 (max 0.41 ms); 18–30 ms to 
 **Known limits:** an early cut keeps only ~32 ms after the speech (not 192 ms), so a last sound could be clipped; the
 quietest chunk can still be a consonant closure; two call-side people speaking back to back without a gap end up in one
 segment (speakers module); webrtcvad rejected (older, worse on noise).
+**Longer phrases measured (2026-11-01, `eval/run_asr.py` on `eval/real`, TESTS EV4):** spontaneous speech has few pauses,
+so 15 of 20 phrases were cut early (5 s) or hard (10 s), and one hard cut split a word («մաթեմատիկ։ Կեկայի»). Early cut
+after 8 s and hard cut at 15 s: WER 26.7 → 26.2 %, CER 8.8 → 9.6 %. The split word was whole again, but endings were
+lost at other cuts («պահին» → «պահ», «ունեմ» → «ուն») and 3 words disappeared in audio-03. **Rejected: 5 s / 10 s
+kept.** The clipped endings match the first known limit above: a 96 ms dip can be the quiet end of a word.
+**Longer early-cut dip measured (2026-11-01, TESTS EV5):** min dip 96 / 160 / 224 / 320 ms → WER 26.7 / 27.2 / 26.2 /
+26.7 %, CER 8.8 / 8.9 / 9.7 / 9.7 %, hand-over p50 0.06 / 0.10 / 0.13 / 0.16 s. No gain: **96 ms kept.** The phrase list
+(`--segments`) shows the cuts fall at clause boundaries and only ~3 of the 51 word errors come from cuts: (1) the hard cut
+at 10 s split «մաթեմատիկայի» (a longer dip cannot help: no dip there); (2) after an early cut, audio the VAD scores as
+silence until the next speech is dropped once it is longer than the 192 ms pre-roll, so a soft first sound can go
+(«սենց» → «Ս»); (3) with a longer dip the segment ends right after its last word and the ASR dropped the last words
+(«երկու, կամ երեք»). The other ~48 errors are inside phrases (names, rare and casual words, word boundaries).
 **Found in live calls (2026-11-01, chat 05, `scripts/live_asr.py`):** in a 10.8 min Zoom call the mic side was handed
 over p50 1.97 s / max 3.32 s after the end of its phrases, the call side 0.44 / 0.51 s (the 0.32 s measured on
 recordings). Likely cause, not yet verified: the room mic hears the other side through the speakers plus room noise,

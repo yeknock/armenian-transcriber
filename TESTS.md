@@ -12,7 +12,7 @@ Result: ✅ pass · ❌ fail (+ note) · ⬜ not run
 | R2a | `python main.py --list-devices` prints the input devices | ⬜ |
 | R2b | `python main.py --mic "MacBook Air Microphone" --call BlackHole` starts | ⬜ |
 | R2c | Wrong or ambiguous device name → clear error, non-zero exit code | ⬜ |
-| R3 | CER/WER on the eval set reported | ⬜ |
+| R3 | CER/WER on the eval set reported | ✅ 2026-11-01 baseline on `eval/real` (3 clips, 191 words): CER 8.8 %, WER 26.7 % (EV2); more clips and call-side recordings still to add |
 | R4 | English of every eval clip rated good / ok / bad by an Armenian speaker | ⬜ |
 | R5a | Mic lines are always `Me` | ⬜ |
 | R5b | Scripted call, 2 call-side people taking ≥ 10 turns → each keeps one label (accuracy %) | ⬜ |
@@ -128,3 +128,18 @@ conversion command); it checks the code paths, not the English. "Mac" = run by t
 | MT14 | Repetition loop (D3c): «Սպասի, սպասի։» no longer loops; `no_repeat_ngram_size` 4 changes ≤ 6 of 71 real call lines and 1 of 29 test lines (`logs/rep_*.txt`) | ✅ 2026-11-01 Mac |
 | MT15 | Word lists (D3d): keys well-formed; 28 `to_written` cases (traps: «չի գալիս», «Իրան», «Ա՜», «ինչի մասին», «երեք հատ»), 13 glossary cases (incl. «Այո՞» → "Yes?", «Հաաա»), 24 non-speech cases | ✅ 2026-11-01 test env |
 | MT16 | `--written` on / off on `logs/mt_live.txt` and `eval/mt_sentences.txt`: user rates every changed line (D3d) | ⬜ Mac |
+
+### eval (2026-11-01, MacBook Air M1)
+
+Eval set `eval/real/`: 3 spontaneous, spoken-style Armenian recordings by the user (mic, 21 / 60 / 40 s, 191 reference
+words), reference texts typed by the user (`audio-0N.txt`, committed); the MP3s and their 16 kHz WAVs in
+`eval/audio/real/` are git-ignored. `eval/run_asr.py` runs each clip through the VAD and ASR as in a live call; reports
+in `logs/eval_asr_*.txt`. One word = ~0.5 points of WER, so differences of 1–2 words are noise.
+
+| ID | Check | Result |
+|---|---|---|
+| EV1 | `tests/test_metrics.py`: normalisation (case, ՞ ՜ ՛ removed, other marks → space, `և` = `եւ`, digits kept), corpus-level CER / WER, bad input raises (15 tests) | ✅ 2026-11-01 test env + Mac |
+| EV2 | Baseline, greedy, VAD 5 / 10 s: CER 8.8 %, WER 26.7 % (per clip 21.9 / 19.8 / 39.7 %); ASR 0.27 s per phrase (median). About 12 of the 51 word errors are the reference differing from what was said («է» typed where «ա» was said ×7, «33,34» said as words, two typos): to fix in the references | ✅ 2026-11-01 Mac (`eval_asr_20261101-204134`) |
+| EV3 | Beam 4 (`malsd_batch`): WER 26.2 %, CER 8.8 %, one phrase changed; ASR 0.62 / 0.98 s per phrase (D1a: rejected) | ✅ 2026-11-01 Mac (`-204211`) |
+| EV4 | VAD early cut 8 s / hard cut 15 s: WER 26.2 %, CER 9.6 %; split word fixed, endings lost elsewhere (D2: rejected). Both together: WER 26.2 %, CER 9.5 % | ✅ 2026-11-01 Mac (`-204148`, `-204231`) |
+| EV5 | VAD early-cut dip 96 / 160 / 224 / 320 ms (`--min-dip-ms ... --segments`): WER 26.7 / 27.2 / 26.2 / 26.7 %, CER 8.8 / 8.9 / 9.7 / 9.7 %, hand-over p50 0.06 → 0.16 s; ~3 of 51 word errors come from cuts (D2: 96 ms kept) | ✅ 2026-11-01 Mac (`-204835`) |

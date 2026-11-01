@@ -58,6 +58,10 @@ Commit: `102f7be Finished ASR module. NeMo with RNNT head.` (also holds the mt w
 - `requirements.txt`: `nemo_toolkit[asr]==3.0.0`. Model files in `models/` (git-ignored); download command in the
   error message. Everything else tried in this chat was removed (onnx-asr, three competitor models, the NeMo venv).
 
+**Later (2026-11-01, after chat 06):** `Transcriber(threads=4, beam_size=1)`: beam_size > 1 = NeMo `malsd_batch` beam
+search (sets `return_best_hypothesis` to true; the checkpoint stores false). Measured on `eval/real`: no gain, 2.3× the
+time, so the default stays greedy (D1a, TESTS EV3).
+
 **Measured on the M1:** see D1a, D1b and TESTS ASR1–ASR10, L1–L4. Live 10.8 min Zoom call (ASR only): 185 phrases,
 p95 3.38 s, max 3.76 s, 0 over 5 s.
 

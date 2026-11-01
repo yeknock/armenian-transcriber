@@ -4,6 +4,7 @@ NVIDIA's original .nemo checkpoint, run with the NeMo toolkit on the CPU, RNNT (
 The checkpoint lives in the git-ignored models/ folder and is loaded from there only, so nothing is fetched
 at run time. Contract, tests and done-criteria: briefs/asr.md
 """
+import copy
 from pathlib import Path
 
 import numpy as np
@@ -18,14 +19,16 @@ MAX_SECONDS = 20.0   # contract: <= 15 s; the model was trained on clips of 0.1-
 
 
 class Transcriber:
-    def __init__(self, threads: int = 4) -> None:
+    def __init__(self, threads: int = 4, beam_size: int = 1) -> None:
         """Load the model once (slow). Raise if it cannot be loaded. No network after the first download.
 
         threads: CPU threads for torch (the M1 has 4 performance cores). Note: torch's thread count is
         process-wide, so this also applies to every other torch model in the program.
+        beam_size: 1 = greedy RNNT decoding (D1a, the default). > 1 = RNNT beam search with NeMo's `malsd_batch`
+        strategy (the one NeMo recommends; read in NeMo 3.0.0 rnnt_decoding.py), keeping beam_size candidates.
         """
-        if threads < 1:
-            raise ValueError(f"threads must be >= 1, got {threads}")
+        if threads < 1 or beam_size < 1:
+            raise ValueError(f"threads and beam_size must be >= 1, got {threads}, {beam_size}")
         found = sorted(MODEL_DIR.glob("*.nemo"))
         if len(found) != 1:
             raise FileNotFoundError(f"need exactly one .nemo file in {MODEL_DIR}, found {len(found)}. "
@@ -33,13 +36,23 @@ class Transcriber:
         import torch
         from nemo.collections.asr.models import EncDecHybridRNNTCTCBPEModel
         from nemo.utils import logging as nemo_logging
+        from omegaconf import open_dict
         nemo_logging.setLevel(nemo_logging.ERROR)
         torch.set_num_threads(threads)
         self._torch = torch
         self._model = EncDecHybridRNNTCTCBPEModel.restore_from(str(found[0]), map_location="cpu")
         self._model.eval()                                # eval mode: no dither, no dropout -> deterministic
-        self._model.change_decoding_strategy(decoder_type="rnnt", verbose=False)
-        self.threads = threads
+        decoding = None                                   # greedy: the checkpoint's own decoding settings
+        if beam_size > 1:
+            decoding = copy.deepcopy(self._model.cfg.decoding)
+            with open_dict(decoding):
+                decoding.strategy = "malsd_batch"
+                decoding.beam.beam_size = beam_size
+                # The checkpoint stores false here: NeMo would then return every candidate, not the best text.
+                decoding.beam.return_best_hypothesis = True
+                decoding.beam.allow_cuda_graphs = False   # a GPU feature; we run on the CPU
+        self._model.change_decoding_strategy(decoding_cfg=decoding, decoder_type="rnnt", verbose=False)
+        self.threads, self.beam_size = threads, beam_size
         # Warm-up: the first run is slower (memory allocation), so do it here, not on the first phrase.
         self._run(np.zeros(SAMPLE_RATE, dtype=np.float32))
 

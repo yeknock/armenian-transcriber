@@ -6,3 +6,4 @@ onnxruntime
 nemo_toolkit[asr]==3.0.0
 ctranslate2==4.8.4
 transformers
+jiwer==4.0.0
