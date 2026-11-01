@@ -115,7 +115,10 @@ So the MODULES budget (≤ 0.8 s per segment) is not enough on its own in a busy
 Mac re-run with D3b done (MT13, glossary checked by the user); Wi-Fi off (MT7) and VAD tests (MT8) pass.
 `scripts/live_asr.py` now also translates (user's request, chat 06: try MT on a real Zoom call before integration):
 EN line, MT time in the delay breakdown, non-speech not printed but counted, CSV columns `mt_end` and `skipped`.
-**Next:** live Zoom call with MT (TESTS L5).
+Live Zoom calls with MT done (with headphones: labels right; English good on formal speech, bad on casual
+speech and on ASR mistakes). **D3c:** `no_repeat_ngram_size=4` against repetition loops (MT14).
+**Next (user's plan, chat 06):** compare on `logs/mt_live.txt`: 600M as now, 600M + spoken→written Armenian
+word list, NLLB-1.3B; then ASR beam search on the saved phrases.
 
 **Notes for integration:** call `mt.is_non_speech(hy_text)` after ASR and skip the segment (do not print it, do not
 translate it; count them in the summary). `Translator()` loads in ~3.4 s; load it with the ASR before the audio

@@ -224,6 +224,39 @@ of this?", and «Հաջողություն։» split off as its own sentence → 
 **Still wrong (README limitation):** colloquial phrases («Ո՞նց ես, ի՞նչ կա չկա» "Who are you, what's not there?") and
 garbled ASR input, which NLLB turns into fluent but wrong English.
 
+## D3c — Against repetition loops: `no_repeat_ngram_size=4` (2026-11-01, chat 06) — Decided
+**Found in the headphone call:** «Սպասի, սպասի։» → "Wait, wait, wait, …" ×15. The length cap (2 × input tokens + 10)
+stopped it too late, and the loop also cost **3.18 s** of MT for a 2-word phrase (a 5 s rule risk).
+**Test:** the 71 unique ASR phrases of the two saved test calls (`logs/mt_live.txt`, git-ignored: private) and the 29
+lines of `eval/mt_sentences.txt`, each config compared line by line with no setting (beam 1):
+
+| Setting | Loop line | Other lines changed (call / test) | Max MT time (call) |
+|---|---|---|---|
+| none | "Wait, wait, …" ×15 | — | 3.18 s |
+| **no_repeat_ngram_size 4 (chosen)** | "Wait, wait, wait, what's going on?" | **5 of 70 / 1 of 29** | 1.64 s |
+| no_repeat_ngram_size 3 | "Wait, wait, wait. What are you doing?" | 13 / 2 (e.g. "we all have preference", "don' t") | 1.12 s |
+| repetition_penalty 1.2 | "Wait, wait. I'm going to go with you." | 33 / 8, several drop part of the sentence | 1.05 s |
+
+With 4 the other changes are small rewordings («It's good. It's all right.»); one line lost its last two words
+("what context") and one long garbled line got shorter. Penalty 1.2 also removed the "you bastard" for «վաբշ», but it
+changed half of all lines and dropped content, which breaks "every sentence must show up".
+**Still:** the loop line gets an invented ending ("what's going on?"): the short-input weakness (D3b), not a loop.
+
+## D3d — Spoken → written Armenian before NLLB; richer word lists (2026-11-01, chat 06) — Tentative (to be measured)
+**Why:** in the headphone call, formal speech translated well, casual speech badly: NLLB learned mostly written
+Armenian («ջահել ժամանակ» → "in the Holocaust", «վաբշ» → "you bastard", «չես կարում» read as "sew", «Նորմալ գնում
+ա» → "I'm going to go normal"). In 421 real ASR phrases: «ա» (is) 65×, «էդ» 25×, «էս» 20×, «ոնց» 16×, «խոսա» 16×.
+**What (`transcriber/mt.py`):** `to_written()` changes only NLLB's input (the HY line keeps the ASR text):
+`SPOKEN_PHRASES` (3, e.g. «ինչ կա չկա» → «ինչ նորություն կա»), `SPOKEN_QUESTIONS` (19, keyed by the word without ՞,
+so the mark can be anywhere: «ո՞նց» → «ինչպե՞ս», «ինչի՞» → «ինչո՞ւ»), `SPOKEN_TO_WRITTEN` (88 words), «չի» → «չէ» at a
+clause end. Words with a colliding written meaning are left out (իրան, արա, մենակ, կանգնի, սպասի, ինչի without ՞,
+էլի, …). Kept although it can collide: «կարում» (also "sews"). Off by default (`spoken_to_written=False`) until measured.
+Also widened at the user's request: `ONE_WORD` 18 → 60 (with ՞ the English ends in "?": «Այո՞» → "Yes?"),
+`NON_SPEECH_WORDS` + hesitation sounds; `lookup_key()` collapses repeated letters («Հաաա» → հա, «ըըը» → ը), and a
+segment is non-speech when every word is a single letter or a hum («Հ. Հմ։»).
+**Decide by:** `try_mt --written` vs without, on `logs/mt_live.txt` (71 real phrases) and `eval/mt_sentences.txt`;
+the user rates every changed line better / worse / same.
+
 ## D4 — Speaker embeddings (2026-10-23) — Open
 Candidates: SpeechBrain ECAPA-TDNN (`spkrec-ecapa-voxceleb`, Apache-2.0, 0.80 % EER VoxCeleb1)
 vs NVIDIA TitaNet (comes with NeMo if D1a picks NeMo). Speaker embeddings are largely

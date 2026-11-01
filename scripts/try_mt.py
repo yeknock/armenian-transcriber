@@ -44,6 +44,12 @@ def main() -> None:
     parser.add_argument("--repeat", type=int, default=1, help="runs per line; the median time is shown")
     parser.add_argument("--whole", action="store_true", help="translate each line as one piece (no splitting)")
     parser.add_argument("--scores", action="store_true", help="show the score of each translated piece")
+    parser.add_argument("--no-repeat", type=int, default=4, metavar="N",
+                        help="forbid any N output tokens from repeating (0 = off; D3c default 4)")
+    parser.add_argument("--written", action="store_true",
+                        help="convert spoken Armenian forms to written ones before NLLB (mt.to_written, D3d)")
+    parser.add_argument("--rep-penalty", type=float, default=1.0, metavar="P",
+                        help="penalty for tokens already written (1.0 = off, e.g. 1.2)")
     args = parser.parse_args()
     if args.repeat < 1:
         raise SystemExit("error: --repeat must be >= 1")
@@ -63,9 +69,12 @@ def main() -> None:
     import transformers  # noqa: F401
     libs_mb = peak_rss_mb()
     from transcriber.mt import Translator
-    translator = Translator(model=args.model, beam_size=args.beam, threads=args.threads)
+    translator = Translator(model=args.model, beam_size=args.beam, threads=args.threads,
+                            no_repeat_ngram_size=args.no_repeat, repetition_penalty=args.rep_penalty,
+                            spoken_to_written=args.written)
     model_mb = peak_rss_mb()
-    print(f"model {args.model}, beam {args.beam}, {args.threads} thread(s), CTranslate2 {ctranslate2.__version__} "
+    print(f"model {args.model}, beam {args.beam}, {args.threads} thread(s), no-repeat {args.no_repeat}, "
+          f"rep-penalty {args.rep_penalty}, written {args.written}, CTranslate2 {ctranslate2.__version__} "
           f"(CPU compute types: {', '.join(sorted(ctranslate2.get_supported_compute_types('cpu')))})")
     print(f"loaded in {time.perf_counter() - started:.2f} s (incl. imports and warm-up); peak RSS {model_mb:.0f} MB "
           f"= start {start_mb:.0f} + libraries {libs_mb - start_mb:.0f} (torch included) + model {model_mb - libs_mb:.0f}")
@@ -86,7 +95,9 @@ def main() -> None:
         words.append(len(line.split()))
         english = " ".join(p.en for p in pieces if p.en)
         how = " / ".join(p.how if p.score is None or not args.scores else f"{p.how} {p.score:.2f}" for p in pieces)
-        print(f"\n{number:2d}. HY: {line}\n    EN: {english if english else '(empty)'}\n"
+        changed = " ".join(p.nllb_input or p.hy for p in pieces)
+        nllb_got = f"\n    NLLB got: {changed}" if any(p.nllb_input for p in pieces) else ""
+        print(f"\n{number:2d}. HY: {line}{nllb_got}\n    EN: {english if english else '(empty)'}\n"
               f"    {len(pieces)} piece{'s' if len(pieces) != 1 else ''} ({how}), {words[-1]} words, {took:.3f} s")
 
     longest = max(range(len(lines)), key=lambda i: words[i])
