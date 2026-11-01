@@ -46,13 +46,13 @@ full AI chat history — is part of the result; see [How this was built](#how-th
 |---|---|
 | Capture the microphone and the system audio (the call) at the same time; user picks the devices | ✅ `--list-devices`, `--mic`, `--call` (device name or id) |
 | Armenian speech → Armenian text | ✅ NVIDIA FastConformer (CER 8.8 %, WER 26.7 % on our own spontaneous recordings) |
-| Translate every segment into English | ✅ NLLB-200 (600M by default; 1.3B with `--mt-model nllb-1.3b`) |
-| Mic = `Me`; call side = `Speaker 1, 2, …`, stable for the session | ✅ `Me` always right. ⚠️ Call-side labels work but are **not tuned or measured yet**; the first live runs gave more labels than expected (see [limitations](#known-limitations)) |
+| Translate every segment into English | ✅ NLLB-200 1.3B with a spoken→written Armenian word list (600M with `--mt-model nllb-600m`) |
+| Mic = `Me`; call side = `Speaker 1, 2, …`, stable for the session | ✅ `Me` always right. ⚠️ Call-side labels: tuned on a 2-voice podcast (right 2 speakers) after a live call gave 7 labels for 3 people; not yet re-checked live (see [limitations](#known-limitations)) |
 | Live terminal output: time, speaker, Armenian, English | ✅ |
 | At most 5 s from the end of a phrase to its English line | ✅ measured in live calls: 0 phrases over 5 s (max 3.76 s with 1.3B, 2.62 s with 600M) |
 | Local models only, Python, runs on my own laptop | ✅ MacBook Air M1, 8 GB, macOS, Python 3.12 |
 | README: setup, models and alternatives, architecture, limitations | ✅ this file |
-| Full AI chat transcripts in `chats/` | ✅ one file per session (see [How this was built](#how-this-was-built)) |
+| Full AI chat transcripts in `chats/` | ⚠️ one Markdown file per session; for sessions 04–06 the app's export did not work, so those files are handovers, and the original chats are in the app (see [How this was built](#how-this-was-built)) |
 | No model weights, audio or keys in Git | ✅ `.gitignore`; checked with `git ls-files` |
 
 Detailed checks with dates and evidence: [`TESTS.md`](TESTS.md).
@@ -66,9 +66,8 @@ Detailed checks with dates and evidence: [`TESTS.md`](TESTS.md).
   itself is not Mac-specific.
 - **Python 3.12** (3.12.3 used) and **Homebrew** (for BlackHole).
 - **Headphones** for listening to the call — wired is safest; Bluetooth works **only for listening** (see below).
-- **About 3–4 GB of disk:** ~1.9 GB for the Python environment (PyTorch, NeMo, …) and ~1.2 GB for the models
-  (+ ~1.4 GB for the optional NLLB-1.3B), plus temporarily ~2.5 GB (5.5 GB for 1.3B) while a translation model is
-  downloaded and converted.
+- **About 4 GB of disk:** ~1.9 GB for the Python environment (PyTorch, NeMo, …) and ~1.9 GB for the three models,
+  plus temporarily ~5.5 GB while the translation model is downloaded and converted.
 - **Internet once**, to install the packages and download the models. After that it runs offline.
 - **Free memory:** the program uses roughly 3 GB with the default models. On an 8 GB Mac, close what you don't need
   besides the call app.
@@ -105,14 +104,15 @@ hf download nvidia/stt_hy_fastconformer_hybrid_large_pc --local-dir models/nvidi
 # speaker identification: NVIDIA TitaNet-Large (~100 MB)
 hf download nvidia/speakerverification_en_titanet_large --local-dir models/titanet_large
 
-# translation: Meta NLLB-200 distilled 600M, converted to CTranslate2 int8 (~620 MB; downloads ~2.5 GB first)
-ct2-transformers-converter --model facebook/nllb-200-distilled-600M --output_dir models/nllb_600m_ct2_int8 --quantization int8 --low_cpu_mem_usage --copy_files tokenizer.json tokenizer_config.json special_tokens_map.json sentencepiece.bpe.model
-```
-
-Optional, the bigger translation model (~1.4 GB; downloads ~5.5 GB first; close other apps while it converts):
-
-```
+# translation: Meta NLLB-200 distilled 1.3B, converted to CTranslate2 int8 (~1.4 GB; downloads ~5.5 GB first;
+# close other apps while it converts)
 ct2-transformers-converter --model facebook/nllb-200-distilled-1.3B --output_dir models/nllb_1.3b_ct2_int8 --quantization int8 --low_cpu_mem_usage --copy_files tokenizer.json tokenizer_config.json special_tokens_map.json sentencepiece.bpe.model
+```
+
+Optional, the smaller and faster translation model (`--mt-model nllb-600m`; ~620 MB; downloads ~2.5 GB first):
+
+```
+ct2-transformers-converter --model facebook/nllb-200-distilled-600M --output_dir models/nllb_600m_ct2_int8 --quantization int8 --low_cpu_mem_usage --copy_files tokenizer.json tokenizer_config.json special_tokens_map.json sentencepiece.bpe.model
 ```
 
 Notes:
@@ -187,8 +187,8 @@ python main.py --mic "MacBook Air Microphone" --call BlackHole
 
 - `--mic`, `--call`: any unique part of the device name (case does not matter) or its id from `--list-devices`. A name
   that matches nothing, several devices, or an output-only device is refused with a list of candidates.
-- `--mt-model nllb-1.3b`: the bigger translation model (about 2× slower, +0.7 GB memory; see
-  [results](#measured-results)). Default `nllb-600m`.
+- `--mt-model nllb-600m`: the smaller translation model — about 2× faster and 0.7 GB lighter, but weaker on casual
+  speech (see [results](#measured-results)). Default `nllb-1.3b`.
 
 At start it loads the three models (speech recognition ~10 s, the very first start after an install 70–100 s; speakers
 and translation a few seconds each), then prints `Listening.` and an entry for every phrase. **Ctrl+C** stops: the
@@ -246,7 +246,7 @@ one model worker. Only the worker prints, so entries never mix. An error in any 
 error — no silent fallbacks.
 
 **Where the 5 s go** (live medians): the VAD needs ~0.3 s of silence to know a phrase ended (often more on the room
-mic), ASR ~0.3–0.4 s, speaker ~0.2 s (call side only), translation ~0.4–0.5 s (600M) or ~0.7–1.1 s (1.3B), plus
+mic), ASR ~0.3–0.4 s, speaker ~0.2 s (call side only), translation ~0.7–1.1 s (1.3B; 600M ~0.4–0.5 s), plus
 waiting in the queue when both sides talk.
 
 ---
@@ -280,16 +280,26 @@ Small (2 MB), MIT, handles noise well; webrtcvad is older and worse on noise. Ru
 instead of Silero's own loader, because that loader quietly sets PyTorch to **one thread for the whole program**,
 which would slow the recogniser. Same scores as the official wrapper (tested on every recording). Every rule value
 (512 ms silence, 5 s early cut, 96 ms dip, 10 s hard cut) was chosen by measuring on 7 recordings and listening to every
-cut.
+cut. Longer phrases (8 s / 15 s) were tried for translation: on a 4-minute podcast they cut fewer sentences in half
+(12 of 35 phrases cut mid-speech instead of 21 of 45) and the English read better — but in a live call with 3 people
+the speaker labels fell apart (12 call-side phrases became 7 "speakers"), because a long phrase more often holds two
+voices. So 5 s / 10 s stays (D2).
 
-### Translation: NLLB-200 distilled 600M with CTranslate2 int8 (D3, D3a–D3d)
+### Translation: NLLB-200 distilled 1.3B with CTranslate2 int8, plus a spoken→written word list (D3, D3a–D3d)
 
 - **Why NLLB:** built for low-resource languages; on FLORES-200 Armenian→English the 3.3B NLLB scores above GPT-4
   few-shot (spBLEU 43.0 vs 35.6). The distilled 600M and 1.3B fit the Mac; 3.3B does not.
-- **600M, greedy (beam 1):** rated by me on 29 test lines: 21 good / 3 ok / 5 bad; beam 2 was not better and 23 %
+- **Greedy decoding (beam 1):** with 600M, rated by me on 29 test lines: 21 good / 3 ok / 5 bad; beam 2 was not better and 23 %
   slower. 0.26–0.37 s per line (median), +1.1 GB.
-- **1.3B (`--mt-model nllb-1.3b`):** about 2× slower (median 0.74 s, max 2.0 s per line) and +0.7 GB more; changes the
-  English of 70 of 100 test lines. Whether it is better is being rated (see [limitations](#known-limitations)).
+- **1.3B, now the default:** about 2× slower than 600M (median 0.74 s, max 2.0 s per line) and +0.7 GB more memory;
+  it changed the English of 70 of 100 test lines, and on casual speech it reads better (e.g. «ջահել ժամանակ» "when
+  young": 600M "in the Holocaust", 1.3B "in the past"). Chosen after reading 600M, 1.3B, and each with the word list
+  side by side.
+- **Spoken→written word list (on):** NLLB learned mostly written Armenian. Before translating, ~110 spoken forms are
+  turned into written ones (`ա` → `է`, `էդ` → `այդ`, `ոնց` → `ինչպես`, slang and Russian loans); the Armenian line
+  on screen stays as recognised. It changed the input of 33 of 71 real call phrases, fixed errors 1.3B alone did not
+  («թե որ թվերին ա ապրել» → "what numbers **he** lived in", not "you"), touched only 5 of 29 clean test lines, all
+  correctly, and costs no time.
 - **Rules for measured weak spots:** a one-word segment alone gets invented English («Այո։» → "I did."), so 60 common
   replies come from a glossary; the recogniser's text for coughs is not printed; a one-word sentence is translated
   together with its neighbour; `no_repeat_ngram_size=4` stops loops like "Wait, wait, wait…" (which also cost 3 s).
@@ -302,7 +312,11 @@ cut.
 23M parameters, 192-number fingerprint, 0.66 % EER on VoxCeleb1, CC-BY-4.0; trained on English but also on telephone
 speech, and voice fingerprints depend little on the language. It runs through the NeMo toolkit the recogniser already
 uses, so it adds no library. SpeechBrain ECAPA (0.80 % EER) is the alternative if TitaNet does badly on our calls.
-The matching rule (threshold 0.5, new speakers only from phrases ≥ 1 s) is a **starting value, not measured yet**.
+The matching rule was tuned after it failed in a live call (7 "speakers" for 3 people): on real fingerprints of a
+2-voice podcast, phrases of 2 s or more match their own speaker at ≥ 0.66 and the other at ≤ 0.35, while shorter
+phrases are unreliable (own-speaker similarity down to 0.04). So: **threshold 0.45**, and only phrases **≥ 2 s** may
+start or change a speaker (shorter ones take the closest label). That finds the right 2 speakers on the podcast; a
+live call with 3 people on the call side is the next check.
 
 ---
 
@@ -325,9 +339,13 @@ what was said (e.g. «է» written where «ա» was said), so the real WER is ne
 this model at 23.6 % WER on news and 60.8 % on movie dialogue.
 
 **Memory** (added by each model, measured on its own): ASR +1.37 GB, NLLB-600M +1.07–1.30 GB (1.3B +1.81–1.83 GB),
-both VADs ~0.05 GB. The whole program was not measured as one number; estimate ~3 GB with 600M.
+both VADs ~0.05 GB, TitaNet (not measured alone). The whole program was not measured as one number; estimate ~3.5 GB
+with 1.3B (~3 GB with 600M).
 
-**Time per phrase:** ASR 0.27–0.40 s, speaker 0.18–0.25 s (median), translation 0.37 s (600M) / 0.74 s (1.3B) median.
+**Time per phrase:** ASR 0.27–0.40 s, speaker 0.18–0.25 s (median), translation 0.74 s (1.3B) / 0.37 s (600M) median.
+
+*Note:* the live runs and the replay in this section were made **before** the word list became the default; the 1.3B
+run is the only one with today's translation model. A long call with the final defaults is still to do (R7a).
 
 ---
 
@@ -340,11 +358,11 @@ Honest list; most are measured, see TESTS / DECISIONS.
   often mistranslates casual phrases even when the Armenian is right («ջահել ժամանակ» "when young" became "in the
   Holocaust" with 600M). Garbled Armenian becomes fluent but wrong English: the English line can sound confident
   while being wrong.
-- **Call-side speaker labels are not tuned.** The threshold is a starting value and accuracy is not measured yet.
-  The first live runs look off: one gave `Speaker 1` once and `Speaker 2` for all other call phrases, a 2.7-minute
-  podcast run gave 4 labels. A weak first phrase (a cough, a short "hello") currently founds Speaker 1 on its own. Two
-  people talking back to back with no pause can also land in one phrase (one label). Overlapping speech is not
-  handled.
+- **Call-side speaker labels are tuned on one recording only.** With the first, untuned settings a live call with 3
+  people on the call side gave 7 labels. The settings now come from a 2-voice podcast (right 2 speakers, every phrase
+  in the right group), but call audio is more compressed and voices can be more alike; a new live check is needed.
+  Two people talking back to back with no pause can land in one phrase (one label); overlapping speech is not handled;
+  a person who only ever says short phrases (< 2 s) never gets a label of their own.
 - **Short phrases:** a one-word phrase gets no new speaker (its fingerprint is weak) and joins the closest one. A real
   one-letter reply said alone (e.g. «Է՞») is hidden together with coughs.
 - **Echo:** with laptop speakers the call is transcribed a second time as `Me` (out of scope by the brief) — use
@@ -354,8 +372,11 @@ Honest list; most are measured, see TESTS / DECISIONS.
   is not verified.
 - **Very busy calls:** both sides share one model worker. A replay of the busiest logged call stays under 5 s with
   600M; with 1.3B one phrase in 185 would be just over (5.17 s, pessimistic estimate).
-- **Memory:** ~3 GB of an 8 GB Mac; with NLLB-1.3B ~3.5 GB. With many other apps open, the Mac may swap and slow down.
-- **Long monologues** are cut every 5–10 s; a cut can split a word (seen once in our 3 test recordings, 20 phrases).
+  If latency gets tight, `--mt-model nllb-600m` halves the translation time.
+- **Memory:** ~3.5 GB of an 8 GB Mac with NLLB-1.3B (~3 GB with 600M). With many other apps open, the Mac may swap and slow down.
+- **Long monologues** are cut every 5–10 s; almost half of such cuts fall while the person is still speaking, often
+  mid-sentence, and NLLB translates each piece without the one before, so the English of those pieces suffers. Longer
+  pieces helped the English but broke the speaker labels (D2).
 - **Not tested as a whole:** a 10-minute run of `main.py`, and the whole program with Wi-Fi off (each model was tested
   offline on its own). The first start after an install takes 70–100 s.
 - **macOS only as tested**; other systems need their own loopback input.
@@ -363,10 +384,10 @@ Honest list; most are measured, see TESTS / DECISIONS.
 
 ## What I would improve with more time
 
-1. **Tune and measure speaker labels** on recordings with 2 and 3 known voices (the tool is ready:
-   `scripts/try_speakers.py`); then maybe only *confirm* a new speaker after two similar phrases.
-2. **Translation of casual speech:** finish rating NLLB-1.3B and the spoken→written word list (D3d, built but off);
-   give the translator the previous sentence as context.
+1. **Measure speaker labels on real calls** with 3 known voices (the tool is ready: `scripts/try_speakers.py` with a
+   turns file); if needed, only *confirm* a new speaker after two similar phrases.
+2. **Translation context:** give the translator the previous phrase as context, so a sentence split by a cut is
+   translated as a whole; extend the spoken→written word list from more real calls.
 3. **Language model fused into the recogniser** (NeMo supports n-gram fusion) built from Armenian text, for names and
    rare words; a bigger, more varied eval set (more voices, call-side recordings).
 4. **Room-mic hand-over:** find out why the mic side is sometimes slow (VAD scores in the unsure band) and fix it.

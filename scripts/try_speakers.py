@@ -8,7 +8,10 @@
    (a speaker change inside the phrase) and is fed to the matcher but not scored.
 3. Every threshold x min_new_s pair is run over the phrases in order, as live. Accuracy = phrases with the right
    label after the best one-to-one pairing of found and true speakers (extra found speakers count as wrong).
+Without a turns file, --speakers N (how many people really speak) gives a quicker check: the table then shows only how
+many speakers each setting finds, and a good setting finds N.
 Run from the repo root:
+    python -m scripts.try_speakers eval/audio/spk_two.wav --speakers 2
     python -m scripts.try_speakers eval/audio/spk_two.wav --turns eval/speakers/spk_two.txt
     python -m scripts.try_speakers eval/audio/spk_two.wav --turns eval/speakers/spk_two.txt --from-cache --show 0.5 1.0
 """
@@ -109,6 +112,25 @@ def run_matcher(embeddings, lengths, threshold, min_new_s) -> tuple[list[int], l
     return labels, similarities
 
 
+def speakers_only(embeddings, lengths, args) -> None:
+    """No turns: how many speakers each setting finds (the recording has args.speakers), and how phrases spread."""
+    pairwise = embeddings @ embeddings.T
+    upper = pairwise[np.triu_indices(len(lengths), 1)]
+    print(f"\n{len(lengths)} phrases ({sum(l < 2 for l in lengths)} shorter than 2 s); similarity between two "
+          f"phrases: percentiles 5/25/50/75/95 = {' / '.join(f'{np.percentile(upper, q):.2f}' for q in (5, 25, 50, 75, 95))}")
+    print(f"\nspeakers found per threshold (rows) and min_new_s (columns); the recording has {args.speakers}:")
+    print("         " + "".join(f"{m:>8g} s" for m in args.min_new_s))
+    for threshold in args.thresholds:
+        cells = [len(set(run_matcher(embeddings, lengths, threshold, m)[0])) for m in args.min_new_s]
+        print(f"  {threshold:5.2f}  " + "".join(f"{c:>10d}" for c in cells))
+    if args.show:
+        threshold, min_new_s = args.show
+        labels, similarities = run_matcher(embeddings, lengths, threshold, min_new_s)
+        print(f"\nthreshold {threshold:g}, min_new_s {min_new_s:g}:  length  found  similarity")
+        for length, p, sim in zip(lengths, labels, similarities):
+            print(f"  {length:5.2f}s  Speaker {p + 1}  {'-' if sim is None else f'{sim:.2f}'}")
+
+
 def compute(wav: Path, cache: Path, threads: int) -> None:
     audio = read_wav(wav)
     segmenter = Segmenter(SOURCE_CALL)
@@ -144,7 +166,8 @@ def compute(wav: Path, cache: Path, threads: int) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("wav", type=Path, help="call-side recording, 16 kHz mono 16-bit")
-    parser.add_argument("--turns", type=Path, required=True, help="who spoke when, one line per turn: 0:00-0:14 A")
+    parser.add_argument("--turns", type=Path, help="who spoke when, one line per turn: 0:00-0:14 A")
+    parser.add_argument("--speakers", type=int, help="without --turns: how many people really speak in the recording")
     parser.add_argument("--from-cache", action="store_true", help="use the saved fingerprints, do not load TitaNet")
     parser.add_argument("--threads", type=int, default=4, help="torch CPU threads (the program uses 4)")
     parser.add_argument("--thresholds", type=float, nargs="+", default=THRESHOLDS)
@@ -152,7 +175,9 @@ def main() -> None:
     parser.add_argument("--show", type=float, nargs=2, metavar=("THRESHOLD", "MIN_NEW_S"),
                         help="print every phrase for this setting")
     args = parser.parse_args()
-    turns = read_turns(args.turns)
+    if (args.turns is None) == (args.speakers is None):
+        parser.error("give either --turns (who spoke when) or --speakers N (how many people speak)")
+    turns = read_turns(args.turns) if args.turns else None
     cache = LOG_DIR / f"speakers_{args.wav.stem}.npz"
     if not args.from_cache:
         if not args.wav.is_file():
@@ -163,6 +188,9 @@ def main() -> None:
     data = np.load(cache)
     starts, ends, embeddings = data["starts"], data["ends"], data["embeddings"]
     lengths = list(ends - starts)
+    if turns is None:
+        speakers_only(embeddings, lengths, args)
+        return
     truth = [true_label(s, e, turns) for s, e in zip(starts, ends)]
     real = sorted({t for t in truth if t})
     print(f"\n{len(truth)} phrases: {sum(t is not None for t in truth)} scored, {truth.count(None)} mixed or outside "

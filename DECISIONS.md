@@ -166,6 +166,18 @@ at 10 s split «մաթեմատիկայի» (a longer dip cannot help: no dip the
 silence until the next speech is dropped once it is longer than the 192 ms pre-roll, so a soft first sound can go
 («սենց» → «Ս»); (3) with a longer dip the segment ends right after its last word and the ASR dropped the last words
 («երկու, կամ երեք»). The other ~48 errors are inside phrases (names, rare and casual words, word boundaries).
+**Changed for translation (2026-11-01, user's decision): early cut after 8 s, hard cut at 15 s.** The ASR does not
+care (EV4), but NLLB translates each phrase alone, and a phrase cut while the person is still speaking is often half
+a sentence. On the 4-min podcast `spk_two.wav`, 21 of 45 phrases were cut mid-speech with 5 / 10 s, 12 of 35 with
+8 / 15 s. `eval/compare_vad_mt.py` printed both settings' English (`logs/vad_mt_spk_two.txt`, NLLB-600M: MT per phrase
+median 0.41 → 0.52 s, max 1.17 s in both); the user read them and chose 8 / 15. Cost: in nonstop speech the first
+words of a phrase appear later (up to ~15 s), longer phrases take longer to translate; 15 s is within the ASR's 20 s.
+Defaults in `Segmenter` changed; the VAD rule tests keep 5 / 10 explicitly (`RULE_TUNING` in `tests/test_vad.py`).
+**Reverted the same evening (2026-11-01, user's decision): back to 5 s / 10 s.** In the first live Zoom call with 8 / 15 s
+(3 people) the call-side labels fell apart: 12 call-side phrases became 7 "speakers" (`logs/latency.csv`, 19:05). Longer
+phrases more often hold two voices, whose mixed fingerprint matches nobody; the untuned speaker settings (D4) made it
+worse. Translation keeps NLLB-1.3B + the word list (D3a, D3d). Fewer half-sentences for MT stays an open problem
+(better: give MT the previous phrase as context, not longer phrases).
 **Found in live calls (2026-11-01, chat 05, `scripts/live_asr.py`):** in a 10.8 min Zoom call the mic side was handed
 over p50 1.97 s / max 3.32 s after the end of its phrases, the call side 0.44 / 0.51 s (the 0.32 s measured on
 recordings). Likely cause, not yet verified: the room mic hears the other side through the speakers plus room noise,
@@ -222,6 +234,14 @@ of this?", and «Հաջողություն։» split off as its own sentence → 
 `Հ։` 13×, …). Colloquial «Ո՞նց ես, ի՞նչ կա չկա» → "Who are you, what's not there?" (BAD). Probe: `eval/mt_short.txt`
 (D3b).
 
+**Changed (2026-11-01, user's decision): NLLB-200-distilled-1.3B is the default** (`--mt-model nllb-600m` keeps 600M).
+Converted with the same command (`--low_cpu_mem_usage`; transformers then starts a background download of a
+`model.safetensors` copy, not needed). On 100 lines (71 real call phrases + 29 test lines) the English changed on 70;
+time ~2× (real call lines: median 0.37 → 0.74 s, max 1.03 → 1.99 s; test lines max 1.22 → 2.22 s); model memory +1.10
+→ +1.83 GB, whole program ~3.5 GB (estimate). Replay of the busiest logged call (5 / 10 s VAD, pessimistic MT times):
+max 4.47 → 5.17 s, 1 of 185 phrases over 5 s. Live, `main.py` with 1.3B (2.7 min): max 3.76 s, 0 over 5 s. Chosen with
+D3d (below) after reading the four variants side by side; to watch in long calls (R7a).
+
 ## D3b — Short inputs: one-word sentences stay with a neighbour, a one-word glossary, non-speech not printed (2026-11-01, chat 06) — Decided
 **Probe** (`eval/mt_short.txt`, 30 lines, beam 1, `try_mt --scores`, split vs `--whole`; logs `logs/mt_short_*.txt`):
 - *A one-word sentence inside a longer segment* is right when NLLB sees it with its neighbour, wrong alone:
@@ -264,7 +284,7 @@ With 4 the other changes are small rewordings («It's good. It's all right.»); 
 changed half of all lines and dropped content, which breaks "every sentence must show up".
 **Still:** the loop line gets an invented ending ("what's going on?"): the short-input weakness (D3b), not a loop.
 
-## D3d — Spoken → written Armenian before NLLB; richer word lists (2026-11-01, chat 06) — Tentative (to be measured)
+## D3d — Spoken → written Armenian before NLLB; richer word lists (2026-11-01, chat 06) — Decided: on (2026-11-01)
 **Why:** in the headphone call, formal speech translated well, casual speech badly: NLLB learned mostly written
 Armenian («ջահել ժամանակ» → "in the Holocaust", «վաբշ» → "you bastard", «չես կարում» read as "sew", «Նորմալ գնում
 ա» → "I'm going to go normal"). In 421 real ASR phrases: «ա» (is) 65×, «էդ» 25×, «էս» 20×, «ոնց» 16×, «խոսա» 16×.
@@ -278,8 +298,14 @@ Also widened at the user's request: `ONE_WORD` 18 → 60 (with ՞ the English en
 segment is non-speech when every word is a single letter or a hum («Հ. Հմ։»).
 **Decide by:** `try_mt --written` vs without, on `logs/mt_live.txt` (71 real phrases) and `eval/mt_sentences.txt`;
 the user rates every changed line better / worse / same.
+**Measured and decided (2026-11-01, after chat 06):** on the 71 real call phrases the word list changed NLLB's input on
+33 and the English on 29 (with 600M and with 1.3B); on the 29 test lines it changed 5 inputs, each correctly («ա» → «է»,
+«էն» → «այն», «խոսա» → «խոսիր»); no time cost. Examples: «ջահել ժամանակ» "in the Holocaust" → "when they were
+younger"; «թե որ թվերին ա ապրել» "what numbers you lived in" → "… he lived in". Four variants side by side
+(`logs/mtcmp4_rate.txt`: 600M, 1.3B, each with and without the list); the user chose **1.3B + word list** after reading
+them (no line-by-line tally was written). `Translator(spoken_to_written=True)` is now the default.
 
-## D4 — Speaker embeddings (2026-10-23) — Tentative: TitaNet-Large, threshold and length not yet measured
+## D4 — Speaker embeddings (2026-10-23) — Tentative: TitaNet-Large, threshold 0.45, new speakers from 2 s (measured on one podcast)
 Candidates: SpeechBrain ECAPA-TDNN (`spkrec-ecapa-voxceleb`, Apache-2.0, 0.80 % EER VoxCeleb1)
 vs NVIDIA TitaNet (comes with NeMo, which D1a chose: no new library). Speaker embeddings are largely
 language-independent; a 5-language zero-shot study found the two roughly equal.
@@ -292,6 +318,17 @@ cosine >= threshold joins, else a new speaker only if the phrase is >= min_new_s
 speaker and never change one; first phrase = Speaker 1. **Starting values 0.5 / 1.0 s, not measured yet:** the user
 chose to finish the program end to end first (2026-11-01). To tune: fill `eval/speakers/spk_two.txt` (2-voice podcast,
 45 phrases) and run `scripts/try_speakers.py` (threshold x length table). ECAPA stays the fallback.
+**Failed live, then measured (2026-11-01):** a Zoom call with 3 people on the call side (VAD 8 / 15 s) gave 12 call-side
+phrases → 7 "speakers"; four new speakers came from phrases of 1.2–2.0 s (TESTS SP5). Real TitaNet fingerprints of the
+2-voice podcast `spk_two.wav` (45 phrases, VAD 5 / 10 s, 0.19 s per phrase; `try_speakers.py --speakers 2`): pairwise
+similarities split into two groups (different people ~0.0–0.3, same person ~0.5–0.85). Against an offline clustering of
+all phrases into 2 groups: phrases ≥ 2 s match their own speaker's mean at ≥ 0.66 and the other's at ≤ 0.35; phrases
+< 2 s match their own speaker as low as 0.04 — short phrases give unreliable fingerprints. Every threshold 0.30–0.55
+found 2 speakers here, 100 % in the right group, so the podcast alone does not decide the value; it sets the margins.
+**Chosen: threshold 0.45** (middle of 0.35 … 0.66, ~0.1 margin both ways for worse call audio), **min_new_s 2.0 s**
+(short phrases never start or change a speaker), and a short **first** phrase no longer founds Speaker 1 (it is
+labelled 1 but the first phrase ≥ 2 s sets the fingerprint) — in the live call the 2.0 s first phrase founded a
+Speaker 1 that nothing matched again. Still to check: a live call with 3 call-side people (R5b, R5c).
 
 ## D5 — Architecture: cascade, segment-based (2026-10-23) — Tentative
 VAD → (speaker) → ASR → MT, one shared worker. Streaming ASR rejected: much more complex

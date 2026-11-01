@@ -3,8 +3,8 @@
 Two parts, so the labelling logic can be tested without the model:
 - SpeakerMatcher: online clustering of voice fingerprints (embeddings), pure numpy. Every speaker keeps the mean
   direction of their fingerprints; a phrase joins the most similar speaker if the cosine similarity reaches
-  `threshold`, otherwise it starts a new speaker, but only if it is at least `min_new_s` long (a «Այո» gives a weak
-  fingerprint). Short phrases never start a speaker and never change one: they take the most similar label.
+  `threshold`, otherwise it starts a new speaker, but only if it is at least `min_new_s` long (a short phrase gives a
+  weak fingerprint). Short phrases never start a speaker and never change one: they take the most similar label.
 - _TitaNet: NVIDIA TitaNet-Large (nvidia/speakerverification_en_titanet_large, 23M parameters, 192 numbers per phrase,
   16 kHz mono; model card: 0.66 % EER on VoxCeleb1, CC-BY-4.0), run with the NeMo toolkit the ASR already uses, on
   the CPU. Loaded from the git-ignored models/ folder only, so nothing is fetched at run time.
@@ -27,11 +27,13 @@ class SpeakerMatcher:
 
     threshold: the lowest cosine similarity to a speaker's mean fingerprint that still counts as that speaker.
     min_new_s: phrases shorter than this never start a new speaker and never change a speaker's mean (weak
-    fingerprints); they get the most similar speaker. The first phrase of a session always starts Speaker 0.
-    Defaults: starting values, chosen by measuring in DECISIONS.md D4.
+    fingerprints); they get the most similar speaker. Before any speaker exists, a short phrase is labelled 0 but stores
+    nothing: the first phrase of min_new_s or more founds speaker 0.
+    Defaults measured on the 2-voice podcast (D4): phrases >= 2 s match their own speaker at >= 0.66 and the other at
+    <= 0.35, so 0.45 leaves a margin both ways; phrases < 2 s matched their own speaker as low as 0.04.
     """
 
-    def __init__(self, threshold: float = 0.5, min_new_s: float = 1.0) -> None:
+    def __init__(self, threshold: float = 0.45, min_new_s: float = 2.0) -> None:
         if not -1.0 < threshold < 1.0 or min_new_s < 0:
             raise ValueError(f"need -1 < threshold < 1 and min_new_s >= 0, got {threshold}, {min_new_s}")
         self.threshold, self.min_new_s = threshold, min_new_s
@@ -50,8 +52,10 @@ class SpeakerMatcher:
         if norm == 0.0:
             raise ValueError("embedding is all zeros")
         unit = embedding.astype(np.float64) / norm
+        long_enough = seconds >= self.min_new_s
         if not self._sums:
-            self._sums.append(unit.copy())
+            if long_enough:                    # a short first phrase gets label 0 but founds nothing (weak fingerprint)
+                self._sums.append(unit.copy())
             self.last_similarity = None
             return 0
         if unit.shape != self._sums[0].shape:
@@ -59,7 +63,6 @@ class SpeakerMatcher:
         similarities = [float(unit @ (s / np.linalg.norm(s))) for s in self._sums]
         best = int(np.argmax(similarities))
         self.last_similarity = similarities[best]
-        long_enough = seconds >= self.min_new_s
         if similarities[best] >= self.threshold:
             if long_enough:
                 self._sums[best] += unit
@@ -101,8 +104,8 @@ class SpeakerIdentifier:
     Never returns "Me": the pipeline labels the mic side itself.
     """
 
-    def __init__(self, threshold: float = 0.5, min_new_s: float = 1.0) -> None:
-        """Load TitaNet once (slow); raise if it cannot be loaded. Tuning: see SpeakerMatcher."""
+    def __init__(self, threshold: float = 0.45, min_new_s: float = 2.0) -> None:
+        """Load TitaNet once (slow); raise if it cannot be loaded. Tuning: see SpeakerMatcher (D4)."""
         self._matcher = SpeakerMatcher(threshold=threshold, min_new_s=min_new_s)
         self._model = _TitaNet()
 

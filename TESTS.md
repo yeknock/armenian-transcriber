@@ -127,7 +127,9 @@ conversion command); it checks the code paths, not the English. "Mac" = run by t
 | MT13 | Mac re-run of `eval/mt_short.txt` and `eval/mt_sentences.txt` with D3b: lines 26–29 of mt_short as in `--whole`; user checks the glossary English | ✅ 2026-11-01 Mac (`logs/mt_*_d3b.txt`): 26–29 identical to `--whole`, line 30 still split (both sentences kept); of the 5 BAD lines of mt_sentences, 3 now "Yes." / "Good luck." / skipped as non-speech, 2 unchanged (colloquial idiom, garbled ASR); times unchanged; glossary English checked by the user |
 | MT14 | Repetition loop (D3c): «Սպասի, սպասի։» no longer loops; `no_repeat_ngram_size` 4 changes ≤ 6 of 71 real call lines and 1 of 29 test lines (`logs/rep_*.txt`) | ✅ 2026-11-01 Mac |
 | MT15 | Word lists (D3d): keys well-formed; 28 `to_written` cases (traps: «չի գալիս», «Իրան», «Ա՜», «ինչի մասին», «երեք հատ»), 13 glossary cases (incl. «Այո՞» → "Yes?", «Հաաա»), 24 non-speech cases | ✅ 2026-11-01 test env |
-| MT16 | `--written` on / off on `logs/mt_live.txt` and `eval/mt_sentences.txt`: user rates every changed line (D3d) | ⬜ Mac |
+| MT16 | `--written` on / off on `logs/mt_live.txt` and `eval/mt_sentences.txt`: user rates every changed line (D3d) | ✅ 2026-11-01 Mac: input changed on 33 / 71 real phrases (English on 29), 5 / 29 test lines (all correct); four variants read side by side by the user, word list chosen (no line-by-line tally) |
+| MT17 | NLLB-1.3B vs 600M on the same 100 lines (`--repeat 3`): time, memory, English | ✅ 2026-11-01 Mac: English changed on 70; real lines median 0.37 → 0.74 s, max 1.03 → 1.99 s; model +1.10 → +1.83 GB; user chose 1.3B (+ word list) as default (D3a) |
+| MT18 | VAD 5 / 10 s vs 8 / 15 s on the podcast `spk_two.wav`, English read by the user (`eval/compare_vad_mt.py`) | ✅ 2026-11-01 Mac: 21 of 45 vs 12 of 35 phrases cut mid-speech; MT median 0.41 → 0.52 s (600M); user chose 8 / 15 (D2), **reverted** after the live call below (SP5) |
 
 ### eval (2026-11-01, MacBook Air M1)
 
@@ -151,7 +153,9 @@ in `logs/eval_asr_*.txt`. One word = ~0.5 points of WER, so differences of 1–2
 | SP1 | `tests/test_speakers.py` (11 tests, made-up fingerprints): labels in order of first appearance, stable over turns, a 3rd voice gets a new label, short phrases never start or change a speaker, the threshold decides, similarity to the mean direction (not the sum), the mean follows a drifting voice, bad input raises | ✅ 2026-11-01 test env + Mac |
 | SP2 | The tests catch planted bugs: 6 of 6 (two tests were too weak at first and were fixed) | ✅ 2026-11-01 test env |
 | SP3 | TitaNet loads from `models/titanet_large/` and runs in the live program; time per phrase (budget ≤ 0.3 s) | ✅ 2026-11-01 Mac: median 0.18 / 0.25 s, max 0.33 / 0.53 s in the two live runs (max over the budget; latency still < 5 s) |
-| SP4 | Accuracy and speakers found on `spk_two.wav` (2 voices) for each threshold × min length (`scripts/try_speakers.py`) | ⬜ needs the turns in `eval/speakers/spk_two.txt` |
+| SP4 | Speakers found on `spk_two.wav` (2 voices) for each threshold × min length (`scripts/try_speakers.py --speakers 2`); right group vs an offline clustering into 2 | ✅ 2026-11-01 Mac fingerprints: thresholds 0.30–0.55 find 2 (100 % right group) at any min length; 0.60–0.70 find 3–6 with short minimums. Margins: phrases ≥ 2 s own ≥ 0.66 / other ≤ 0.35; < 2 s own down to 0.04 → threshold 0.45, min_new_s 2.0 (D4). Hand-typed turns not done (labels from clustering) |
+| SP5 | Live Zoom call, 3 people on the call side, VAD 8 / 15 s, threshold 0.5, min_new_s 1.0 | ❌ 2026-11-01 Mac: 12 call-side phrases → 7 speakers; new speakers came from phrases of 1.2–8.4 s, four of them ≤ 2 s → VAD reverted (D2), speaker settings to tune (D4) |
+| SP6 | Live Zoom call, 3 people on the call side, with VAD 5 / 10 s, threshold 0.45, min_new_s 2.0 | ⬜ next |
 
 ### integration (2026-11-01)
 

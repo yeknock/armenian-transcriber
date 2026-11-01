@@ -57,10 +57,13 @@ class SpeakerMatcherTest(unittest.TestCase):
         b.match(probe, 3.0)
         self.assertAlmostEqual(a.last_similarity, b.last_similarity, places=12)   # ... left its mean unchanged
 
-    def test_first_phrase_is_speaker_0_even_if_short(self):
+    def test_short_first_phrase_is_speaker_0_but_founds_nothing(self):
         matcher = SpeakerMatcher(min_new_s=1.0)
-        self.assertEqual(matcher.match(phrase(1), 0.4), 0)
+        self.assertEqual(matcher.match(phrase(1), 0.4), 0)      # labelled Speaker 1 ...
+        self.assertEqual(matcher.count, 0)                      # ... but its weak fingerprint is not kept
+        self.assertEqual(matcher.match(phrase(0), 3.0), 0)      # the first long phrase founds speaker 0
         self.assertEqual(matcher.count, 1)
+        self.assertEqual(matcher.match(phrase(1), 3.0), 1)      # and only then can a different voice be new
 
     def test_threshold_decides(self):
         # two fingerprints with a known cosine similarity of 0.6

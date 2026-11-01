@@ -3,7 +3,7 @@
 Your microphone is "Me"; the other side of the call (BlackHole) is "Speaker 1", "Speaker 2", ... Run from the repo root:
     python main.py --list-devices
     python main.py --mic "MacBook Air Microphone" --call BlackHole
-    python main.py --mic "MacBook Air Microphone" --call BlackHole --mt-model nllb-1.3b
+    python main.py --mic "MacBook Air Microphone" --call BlackHole --mt-model nllb-600m   # faster, lighter
 Device names can be any unique part of the name, or the id from --list-devices. Ctrl+C stops: the phrases already
 heard are still printed, then a latency summary. A second Ctrl+C stops at once.
 Setup (README): the call app's speaker must be the Multi-Output Device "Call Output" (BlackHole + headphones).
@@ -30,8 +30,8 @@ def main() -> None:
     parser.add_argument("--list-devices", action="store_true", help="print the input devices and exit")
     parser.add_argument("--mic", help="your microphone: part of its name or its id")
     parser.add_argument("--call", help="the call audio, BlackHole: part of its name or its id")
-    parser.add_argument("--mt-model", choices=list(MODELS), default="nllb-600m",
-                        help="translation model (default nllb-600m, D3a; nllb-1.3b: about 2x slower, +0.7 GB)")
+    parser.add_argument("--mt-model", choices=list(MODELS), default="nllb-1.3b",
+                        help="translation model (default nllb-1.3b, D3a; nllb-600m: about 2x faster, 0.7 GB less)")
     args = parser.parse_args()
     if args.list_devices:
         print(list_input_devices())

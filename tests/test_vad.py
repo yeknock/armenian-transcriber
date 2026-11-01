@@ -97,7 +97,8 @@ class SileroModelTest(unittest.TestCase):
 
 
 # ---------------------------------------------------------------- Segmenter rules
-# With the defaults: wait 16 chunks of silence, pad 6 chunks, min speech 8 chunks,
+# These rule tests use soft_max_s=5 / max_segment_s=10 (RULE_TUNING, also the program's defaults, D2; set explicitly so
+# the tests stay valid if the defaults change). So: wait 16 chunks of silence, pad 6 chunks, min speech 8 chunks,
 # early cut after 156 chunks (5 s) at a dip of 3 chunks, hard cut at 312 chunks (10 s) at the
 # quietest of the last 31 chunks (1 s).
 S, Q, U = 0.9, 0.1, 0.4      # speech, silence (quiet), unsure (between 0.35 and 0.5)
@@ -118,13 +119,14 @@ class FakeModel:
 
 
 LOUD = 0.3                   # loudness of every fake chunk, unless the test makes some quiet
+RULE_TUNING = {"soft_max_s": 5.0, "max_segment_s": 10.0}
 
 
 def run(probs, source=SOURCE_MIC, flush=True, quiet=(), **tuning):
     """Feed one chunk per probability. Chunk i's first sample is i / 10000, so a segment's audio
     tells exactly which chunks it holds; its other samples are LOUD, or 0.001 for indices in `quiet`.
     Returns (segments, [chunk index of each return], segmenter)."""
-    segmenter = Segmenter(source, **tuning)
+    segmenter = Segmenter(source, **{**RULE_TUNING, **tuning})
     segmenter._model = FakeModel(probs)
     segments, returned_at = [], []
     for i in range(len(probs)):
@@ -277,7 +279,7 @@ class SegmenterTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             Segmenter(SOURCE_MIC, threshold=0.3, neg_threshold=0.4)
         with self.assertRaises(ValueError):
-            Segmenter(SOURCE_MIC, quiet_search_ms=6000)           # longer than max - soft
+            Segmenter(SOURCE_MIC, quiet_search_ms=6000)           # longer than max - soft (10 - 5 = 5 s)
 
     def test_real_model_ignores_digital_silence(self):
         segmenter = Segmenter(SOURCE_CALL)

@@ -244,16 +244,16 @@ def convert_command(name: str) -> str:
 
 
 class Translator:
-    def __init__(self, model: str = "nllb-600m", beam_size: int = 1, threads: int = 4,
+    def __init__(self, model: str = "nllb-1.3b", beam_size: int = 1, threads: int = 4,
                  no_repeat_ngram_size: int = 4, repetition_penalty: float = 1.0,
-                 spoken_to_written: bool = False) -> None:
+                 spoken_to_written: bool = True) -> None:
         """Load the model once. If model files are missing, raise with a message saying how
         to download/convert them. No network after the first download.
 
-        model: one of MODELS (D3a: 600M). beam_size: 1 = greedy (D3a: rated as good as beam 2 on our lines and
+        model: one of MODELS (default 1.3B since 2026-11-01, D3a; 600M is ~2x faster). beam_size: 1 = greedy (D3a: rated as good as beam 2 on our lines and
         23 % faster). threads: CPU threads for CTranslate2. no_repeat_ngram_size, repetition_penalty: against
-        repetition loops (D3c, comment below). spoken_to_written: run to_written() on NLLB's input (D3d, off until
-        measured).
+        repetition loops (D3c, comment below). spoken_to_written: run to_written() on NLLB's input (D3d; on
+        by default since 2026-11-01).
         """
         if model not in MODELS:
             raise ValueError(f"model must be one of {list(MODELS)}, got {model!r}")

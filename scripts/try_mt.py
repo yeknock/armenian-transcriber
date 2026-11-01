@@ -7,7 +7,7 @@ the latency targets. Lines starting with # are comments. Run from the repo root:
     python -m scripts.try_mt eval/mt_sentences.txt --beam 2 --repeat 3
     python -m scripts.try_mt eval/mt_short.txt --scores            # short inputs: score per sentence
     python -m scripts.try_mt eval/mt_short.txt --scores --whole    # each line as one piece, not split
-Models (see transcriber/mt.py): nllb-600m (default), nllb-1.3b. --whole is a diagnostic only: the program always
+Models (see transcriber/mt.py): nllb-1.3b (default), nllb-600m. --whole is a diagnostic only: the program always
 uses make_pieces (Translator.translate).
 """
 import argparse
@@ -38,7 +38,7 @@ def verdict(value: float, target: float) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("path", type=Path, help="text file, one Armenian segment per line")
-    parser.add_argument("--model", choices=list(MODELS), default="nllb-600m")
+    parser.add_argument("--model", choices=list(MODELS), default="nllb-1.3b")
     parser.add_argument("--beam", type=int, default=1, help="beam size: 1 = greedy (D3a default)")
     parser.add_argument("--threads", type=int, default=4)
     parser.add_argument("--repeat", type=int, default=1, help="runs per line; the median time is shown")
@@ -46,8 +46,9 @@ def main() -> None:
     parser.add_argument("--scores", action="store_true", help="show the score of each translated piece")
     parser.add_argument("--no-repeat", type=int, default=4, metavar="N",
                         help="forbid any N output tokens from repeating (0 = off; D3c default 4)")
-    parser.add_argument("--written", action="store_true",
-                        help="convert spoken Armenian forms to written ones before NLLB (mt.to_written, D3d)")
+    parser.add_argument("--written", action=argparse.BooleanOptionalAction, default=True,
+                        help="convert spoken Armenian forms to written ones before NLLB (mt.to_written, D3d; "
+                             "on by default, --no-written turns it off)")
     parser.add_argument("--rep-penalty", type=float, default=1.0, metavar="P",
                         help="penalty for tokens already written (1.0 = off, e.g. 1.2)")
     args = parser.parse_args()
