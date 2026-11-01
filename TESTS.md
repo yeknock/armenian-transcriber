@@ -2,34 +2,34 @@
 
 Checks come from the brief's requirements (PLAN.md §1), not from the code (Tip 4).
 Module chats add their own section at the bottom.
-Result: ✅ pass · ❌ fail (+ note) · ⬜ not run
+Result: ✅ pass · ⚠️ partly done or passed with a known problem (+ note) · ❌ fail (+ note) · ⬜ not run
 
 ## Requirements (end to end)
 
 | ID | Check | Result |
 |---|---|---|
 | R1 | Mic and BlackHole levels move independently (`scripts/level_meter.py`) | ✅ 2026-10-24 |
-| R2a | `python main.py --list-devices` prints the input devices | ✅ 2026-11-01 test env (fake devices); ⬜ Mac |
-| R2b | `python main.py --mic "MacBook Air Microphone" --call BlackHole` starts | ⬜ |
-| R2c | Wrong or ambiguous device name → clear error, non-zero exit code | ✅ 2026-11-01 test env (wrong name, missing `--call`, same device for both); ⬜ Mac |
+| R2a | `python main.py --list-devices` prints the input devices | ✅ 2026-11-01 Mac (HOCO W35 Max, BlackHole 2ch, MacBook Air Microphone) + test env |
+| R2b | `python main.py --mic "MacBook Air Microphone" --call BlackHole` starts | ✅ 2026-11-01 Mac: live runs with NLLB-600M (2 min, 25 entries) and `--mt-model nllb-1.3b` (2.7 min, 18 entries) |
+| R2c | Wrong or ambiguous device name → clear error, non-zero exit code | ✅ Mac 2026-10-30 (same `resolve_device`: wrong, ambiguous, output-only name, TESTS A2) + 2026-11-01 test env through `main.py` (wrong name, missing `--call`, same device for both) |
 | R3 | CER/WER on the eval set reported | ✅ 2026-11-01 baseline on `eval/real` (3 clips, 191 words): CER 8.8 %, WER 26.7 % (EV2); more clips and call-side recordings still to add |
-| R4 | English of every eval clip rated good / ok / bad by an Armenian speaker | ⬜ |
-| R5a | Mic lines are always `Me` | ⬜ |
-| R5b | Scripted call, 2 call-side people taking ≥ 10 turns → each keeps one label (accuracy %) | ⬜ |
+| R4 | English of every eval clip rated good / ok / bad by an Armenian speaker | ⚠️ 2026-11-01 text lines rated by the user: 29 lines of `eval/mt_sentences.txt` 21 good / 3 ok / 5 bad (MT4); the English of the `eval/real` audio clips not rated yet. Live: formal speech good, casual speech often wrong (D3d) |
+| R5a | Mic lines are always `Me` | ✅ 2026-11-01 Mac: every mic row of both live runs is `Me` (`logs/latency.csv`); by construction in `pipeline.py` |
+| R5b | Scripted call, 2 call-side people taking ≥ 10 turns → each keeps one label (accuracy %) | ⚠️ not measured yet; settings untuned (D4). First signs: the 600M run gave `Speaker 1` once then `Speaker 2` ×14; the podcast run gave 4 call-side labels in 160 s. Tool ready: `scripts/try_speakers.py` + `eval/speakers/spk_two.txt` (turns to fill) |
 | R5c | A 3rd call-side person gets a new label | ⬜ |
-| R6 | Every printed entry has time, speaker, HY and EN | ⬜ |
-| R7a | 10-min call: latency p50 / p95 / max from `logs/latency.csv`; p95 ≤ 5 s | ⬜ |
-| R7b | Both sides talking at once: p95 still ≤ 5 s | ⬜ |
-| R8 | Whole run works with Wi-Fi off | ⬜ |
+| R6 | Every printed entry has time, speaker, HY and EN | ✅ 2026-11-01 Mac (user: layout as in the brief) + test env |
+| R7a | 10-min call: latency p50 / p95 / max from `logs/latency.csv`; p95 ≤ 5 s | ⚠️ no 10-min `main.py` run yet. `main.py`: 600M 2 min max 2.62 s, 1.3B 2.7 min max 3.76 s (median 2.77 s), 0 over 5 s. `scripts/live_asr.py` (same models, no speakers): 10.8 min ASR only p95 3.38 / max 3.76 s (L2), 9 min with MT max 4.16 s (L5), 0 over 5 s |
+| R7b | Both sides talking at once: p95 still ≤ 5 s | ⚠️ not tested on purpose. Replay of the busiest logged call (185 phrases, real hand-over and ASR times, pessimistic MT times): 600M max 4.47 s, 0 over 5 s; 1.3B max 5.17 s, 1 over |
+| R8 | Whole run works with Wi-Fi off | ⚠️ each model alone: VAD (V14), ASR (ASR6), MT (MT7) pass with Wi-Fi off; the whole `main.py` with TitaNet not yet |
 
 ## Edge cases
 
 | ID | Check | Result |
 |---|---|---|
-| E1 | 1 min of silence / room noise → nothing printed | ⬜ |
-| E2 | 30 s non-stop speech → split into several entries, each ≤ 5 s late | ⬜ |
-| E3 | Very short reply ("Այո") → printed; does not create a new speaker | ⬜ |
-| E4 | Ctrl+C → exits within ~1 s, no traceback | ⬜ |
+| E1 | 1 min of silence / room noise → nothing printed | ✅ 2026-11-01 Mac: 60 s room noise → 0 VAD segments (V5), so nothing reaches ASR or the screen |
+| E2 | 30 s non-stop speech → split into several entries, each ≤ 5 s late | ✅ 2026-11-01 Mac: 35 s nonstop → pieces ≤ 9.6 s (V8), handed over ≤ 1 s after their end (V9); live calls 0 over 5 s |
+| E3 | Very short reply ("Այո") → printed; does not create a new speaker | ✅ VAD keeps all 5 short replies (V7, Mac); MT gives the glossary English («Այո։» → "Yes.", MT12/MT13); a phrase < 1 s never starts a speaker (`tests/test_speakers.py`). Not yet watched in a live call |
+| E4 | Ctrl+C → exits within ~1 s, no traceback | ✅ 2026-11-01 test env (`main.py`: last phrases printed, summary, exit 0; second Ctrl+C stops at once); Mac live runs ended with the summary. "~1 s" becomes ~1–2 s when a phrase is still being translated |
 | E5 | Microphone permission missing → clear message naming the setting | ✅ 2026-11-01 test env (fake mic of exact zeros: message, exit 1) |
 | E6 | Call audio on speakers → how often echo shows up as `Me` (measure; echo handling is out of scope) | ❌ 2026-11-01 Mac (`logs/live_asr_20261101-175249.csv`, YouTube podcast, MacBook speakers): 10 / 10 `Call` phrases also came out as `Me` (86–100 % time overlap) → use headphones (D0) |
 
@@ -143,3 +143,21 @@ in `logs/eval_asr_*.txt`. One word = ~0.5 points of WER, so differences of 1–2
 | EV3 | Beam 4 (`malsd_batch`): WER 26.2 %, CER 8.8 %, one phrase changed; ASR 0.62 / 0.98 s per phrase (D1a: rejected) | ✅ 2026-11-01 Mac (`-204211`) |
 | EV4 | VAD early cut 8 s / hard cut 15 s: WER 26.2 %, CER 9.6 %; split word fixed, endings lost elsewhere (D2: rejected). Both together: WER 26.2 %, CER 9.5 % | ✅ 2026-11-01 Mac (`-204148`, `-204231`) |
 | EV5 | VAD early-cut dip 96 / 160 / 224 / 320 ms (`--min-dip-ms ... --segments`): WER 26.7 / 27.2 / 26.2 / 26.7 %, CER 8.8 / 8.9 / 9.7 / 9.7 %, hand-over p50 0.06 → 0.16 s; ~3 of 51 word errors come from cuts (D2: 96 ms kept) | ✅ 2026-11-01 Mac (`-204835`) |
+
+### speakers (2026-11-01, MacBook Air M1)
+
+| ID | Check | Result |
+|---|---|---|
+| SP1 | `tests/test_speakers.py` (11 tests, made-up fingerprints): labels in order of first appearance, stable over turns, a 3rd voice gets a new label, short phrases never start or change a speaker, the threshold decides, similarity to the mean direction (not the sum), the mean follows a drifting voice, bad input raises | ✅ 2026-11-01 test env + Mac |
+| SP2 | The tests catch planted bugs: 6 of 6 (two tests were too weak at first and were fixed) | ✅ 2026-11-01 test env |
+| SP3 | TitaNet loads from `models/titanet_large/` and runs in the live program; time per phrase (budget ≤ 0.3 s) | ✅ 2026-11-01 Mac: median 0.18 / 0.25 s, max 0.33 / 0.53 s in the two live runs (max over the budget; latency still < 5 s) |
+| SP4 | Accuracy and speakers found on `spk_two.wav` (2 voices) for each threshold × min length (`scripts/try_speakers.py`) | ⬜ needs the turns in `eval/speakers/spk_two.txt` |
+
+### integration (2026-11-01)
+
+| ID | Check | Result |
+|---|---|---|
+| I1 | `main.py` with stand-in devices and models: entries in the brief's layout, `Me` / `Speaker N`, non-speech not printed, Ctrl+C finishes the last phrases, summary, `logs/latency.csv` | ✅ 2026-11-01 test env |
+| I2 | Worker crash (planted ASR error) → traceback of the real error, exit 1; silent mic → message naming the setting, exit 1; same device twice / wrong name → clear error | ✅ 2026-11-01 test env |
+| I3 | Live on the Mac with headphones in "Call Output" (YouTube podcast + own voice) | ✅ 2026-11-01 Mac: 600M and 1.3B runs, 0 over 5 s (R2b, R7a) |
+| I4 | `--mt-model nllb-1.3b` loads the 1.3B model; a wrong name is refused | ✅ 2026-11-01 test env + Mac run |

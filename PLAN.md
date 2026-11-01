@@ -67,9 +67,9 @@ Shared types: `transcriber/contracts.py`; each module's interface is in its own 
 | M1 (✅ in `scripts/live_asr.py`) | Walking skeleton (mic only) | Speak Armenian → HY + EN lines appear in terminal | 3 h |
 | M2 (✅ in `scripts/live_asr.py`; `main.py` still to build) | Two sources | Mic → `Me`, BlackHole → `Call` lines, in parallel | 2 h |
 | M3 (partly: decoder D1a and NLLB size D3a decided on our recordings, rated by the user; first CER/WER on 3 clips: TESTS EV2–EV4) | Eval set + measurement | CER/WER + latency per model; decide ASR decoder and NLLB size | 4 h |
-| M4 | Speaker identification | 2+ call speakers get stable labels in a scripted call | 3 h |
-| M5 | Reliability | VAD tuned, long-phrase cap, queue latency under load, clear errors | 3 h |
-| M6 | README, chats export, rehearsal | Real call with 2+ people works end to end; README complete | 3 h |
+| M4 (built, TitaNet; not tuned yet, D4) | Speaker identification | 2+ call speakers get stable labels in a scripted call | 3 h |
+| M5 (partly: VAD tuned D2, long-phrase cap, clear errors; queue under load and soak test open) | Reliability | VAD tuned, long-phrase cap, queue latency under load, clear errors | 3 h |
+| M6 (README done 2026-11-01; rehearsal open) | README, chats export, rehearsal | Real call with 2+ people works end to end; README complete | 3 h |
 
 Commit after every working step. One change at a time.
 

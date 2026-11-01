@@ -36,9 +36,9 @@ EN: Hi, how are you?
 ```
 
 ## Done when
-- v1: [ ] M1 (Armenian spoken into the mic shows HY and EN lines) · [ ] M2 (both sources in parallel)
-- v2: [ ] 10-min soak test, p95 ≤ 5 s · [ ] R1–R8 and E1–E6 in TESTS.md run · [ ] README complete ·
-  [ ] rehearsal call with ≥ 2 people on the call side
+- v1: [x] M1 (Armenian spoken into the mic shows HY and EN lines) · [x] M2 (both sources in parallel) — 2026-11-01 Mac
+- v2: [ ] 10-min soak test, p95 ≤ 5 s · [~] R1–R8 and E1–E6 in TESTS.md run (most done; R5b, R7a, R8 partly) ·
+  [x] README complete (2026-11-01) · [ ] rehearsal call with ≥ 2 people on the call side
 
 **Out of scope:** everything the brief lists as out of scope (GUI, saving transcripts, echo handling, …).
 
