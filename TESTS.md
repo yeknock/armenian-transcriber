@@ -15,12 +15,12 @@ Result: ✅ pass · ⚠️ partly done or passed with a known problem (+ note) �
 | R3 | CER/WER on the eval set reported | ✅ 2026-11-01 baseline on `eval/real` (3 clips, 191 words): CER 8.8 %, WER 26.7 % (EV2); more clips and call-side recordings still to add |
 | R4 | English of every eval clip rated good / ok / bad by an Armenian speaker | ⚠️ 2026-11-01 text lines rated by the user: 29 lines of `eval/mt_sentences.txt` 21 good / 3 ok / 5 bad (MT4); the English of the `eval/real` audio clips not rated yet. Live: formal speech good, casual speech often wrong (D3d) |
 | R5a | Mic lines are always `Me` | ✅ 2026-11-01 Mac: every mic row of both live runs is `Me` (`logs/latency.csv`); by construction in `pipeline.py` |
-| R5b | Scripted call, 2 call-side people taking ≥ 10 turns → each keeps one label (accuracy %) | ⚠️ count right, assignment not verified: 6.3-min Zoom call (2026-11-01 23:22, final defaults: VAD 5 / 10 s, NLLB-1.3B + word list, speakers 0.45 / 2 s): 81 entries (43 `Me`, 38 call side) → 3 call-side speakers for 3 people (33 / 1 / 4 phrases); untuned settings had given 7 for 3 (SP5). Whether every phrase got the right person was not checked (no recording of the call). Podcast: right 2 speakers, every phrase in the right group (SP4) |
-| R5c | A 3rd call-side person gets a new label | ⚠️ 2026-11-01 Mac: 3 labels in the 3-person call (R5b); which phrase belongs to whom not verified |
+| R5b | Scripted call, 2 call-side people taking ≥ 10 turns → each keeps one label (accuracy %) | ✅ checked by the user 2026-11-01: in the 3-person Zoom call each person kept one label. Log of the 6.3-min run with the final settings: 38 call-side phrases → 3 speakers (33 / 1 / 4), where the untuned settings had given 7 for 3 (SP5). Podcast: right 2 speakers, every phrase in the right group (SP4) |
+| R5c | A 3rd call-side person gets a new label | ✅ checked by the user 2026-11-01: the 3rd call-side person got their own label (3 labels for 3 people, R5b) |
 | R6 | Every printed entry has time, speaker, HY and EN | ✅ 2026-11-01 Mac (user: layout as in the brief) + test env |
-| R7a | 10-min call: latency p50 / p95 / max from `logs/latency.csv`; p95 ≤ 5 s | ⚠️ longest `main.py` run 6.3 min (final defaults): 81 entries, p50 1.93 s, p95 4.23 s, max 4.64 s, 0 over 5 s (MT max 2.23 s, ASR max 0.64 s); no 10-min run yet. Earlier `main.py`: 600M 2 min max 2.62 s, 1.3B 2.7 min max 3.76 s (median 2.77 s), 0 over 5 s. `scripts/live_asr.py` (same models, no speakers): 10.8 min ASR only p95 3.38 / max 3.76 s (L2), 9 min with MT max 4.16 s (L5), 0 over 5 s |
+| R7a | 10-min call: latency p50 / p95 / max from `logs/latency.csv`; p95 ≤ 5 s | ✅ checked by the user 2026-11-01: a call of 10+ minutes stayed under 5 s. Logged 6.3-min run with the final settings: 81 entries, p50 1.93 s, p95 4.23 s, max 4.64 s, 0 over 5 s (MT max 2.23 s). Earlier: `main.py` 600M 2 min max 2.62 s, 1.3B 2.7 min max 3.76 s; `live_asr.py` 10.8 min ASR only max 3.76 s, 9 min with MT max 4.16 s |
 | R7b | Both sides talking at once: p95 still ≤ 5 s | ⚠️ not tested on purpose. Replay of the busiest logged call (185 phrases, real hand-over and ASR times, pessimistic MT times): 600M max 4.47 s, 0 over 5 s; 1.3B max 5.17 s, 1 over |
-| R8 | Whole run works with Wi-Fi off | ⚠️ each model alone: VAD (V14), ASR (ASR6), MT (MT7) pass with Wi-Fi off; the whole `main.py` with TitaNet not yet |
+| R8 | Whole run works with Wi-Fi off | ✅ checked by the user 2026-11-01: `main.py` with Wi-Fi off loads all models (incl. TitaNet and NLLB-1.3B) and prints entries. Each model alone before: VAD (V14), ASR (ASR6), MT (MT7) |
 
 ## Edge cases
 
@@ -31,7 +31,7 @@ Result: ✅ pass · ⚠️ partly done or passed with a known problem (+ note) �
 | E3 | Very short reply ("Այո") → printed; does not create a new speaker | ✅ VAD keeps all 5 short replies (V7, Mac); MT gives the glossary English («Այո։» → "Yes.", MT12/MT13); a phrase < 1 s never starts a speaker (`tests/test_speakers.py`). Not yet watched in a live call |
 | E4 | Ctrl+C → exits within ~1 s, no traceback | ✅ 2026-11-01 test env (`main.py`: last phrases printed, summary, exit 0; second Ctrl+C stops at once); Mac live runs ended with the summary. "~1 s" becomes ~1–2 s when a phrase is still being translated |
 | E5 | Microphone permission missing → clear message naming the setting | ✅ 2026-11-01 test env (fake mic of exact zeros: message, exit 1) |
-| E6 | Call audio on speakers → how often echo shows up as `Me` (measure; echo handling is out of scope) | ❌ 2026-11-01 Mac (`logs/live_asr_20261101-175249.csv`, YouTube podcast, MacBook speakers): 10 / 10 `Call` phrases also came out as `Me` (86–100 % time overlap) → use headphones (D0) |
+| E6 | Call audio on speakers → how often echo shows up as `Me` (measure; echo handling is out of scope) | ✅ measured 2026-11-01 Mac (`logs/live_asr_20261101-175249.csv`, YouTube podcast, MacBook speakers): 10 / 10 `Call` phrases also came out as `Me` (86–100 % time overlap) → setup uses headphones (D0); echo handling is out of scope (brief) |
 
 ## Module checks
 
@@ -52,7 +52,7 @@ Result: ✅ pass · ⚠️ partly done or passed with a known problem (+ note) �
 | A7 | Ctrl+C during `try_audio` → "Stopped early.", result printed, no traceback | ✅ 2026-10-30 |
 | A8 | `record.py` writes 16 kHz mono 16-bit, exact length, correct pitch, no clicks (440 Hz tone read back); refuses an existing file and `--seconds 0`; Ctrl+C writes nothing, no traceback | ✅ test env |
 | A9 | `record.py` clips from mic and BlackHole sound right | ✅ 2026-10-31 (the mic clip also has the speaker sound: echo, see E6) |
-| A10 | `dropouts` stay 0 with ASR + MT running (`latency="low"` means a mic callback every 1.3 ms) | ⬜ M5 soak test |
+| A10 | `dropouts` stay 0 with ASR + MT running (`latency="low"` means a mic callback every 1.3 ms) | ✅ checked by the user 2026-11-01: the summary after the live calls showed 0 audio dropouts on both sides with ASR, speakers and MT running |
 
 ### vad (chat 04, MacBook Air M1)
 
@@ -154,8 +154,8 @@ in `logs/eval_asr_*.txt`. One word = ~0.5 points of WER, so differences of 1–2
 | SP2 | The tests catch planted bugs: 6 of 6 (two tests were too weak at first and were fixed) | ✅ 2026-11-01 test env |
 | SP3 | TitaNet loads from `models/titanet_large/` and runs in the live program; time per phrase (budget ≤ 0.3 s) | ✅ 2026-11-01 Mac: median 0.18 / 0.25 s, max 0.33 / 0.53 s in the two live runs (max over the budget; latency still < 5 s) |
 | SP4 | Speakers found on `spk_two.wav` (2 voices) for each threshold × min length (`scripts/try_speakers.py --speakers 2`); right group vs an offline clustering into 2 | ✅ 2026-11-01 Mac fingerprints: thresholds 0.30–0.55 find 2 (100 % right group) at any min length; 0.60–0.70 find 3–6 with short minimums. Margins: phrases ≥ 2 s own ≥ 0.66 / other ≤ 0.35; < 2 s own down to 0.04 → threshold 0.45, min_new_s 2.0 (D4). Hand-typed turns not done (labels from clustering) |
-| SP5 | Live Zoom call, 3 people on the call side, VAD 8 / 15 s, threshold 0.5, min_new_s 1.0 | ❌ 2026-11-01 Mac: 12 call-side phrases → 7 speakers; new speakers came from phrases of 1.2–8.4 s, four of them ≤ 2 s → VAD reverted (D2), speaker settings to tune (D4) |
-| SP6 | Live Zoom call, 3 people on the call side, with VAD 5 / 10 s, threshold 0.45, min_new_s 2.0 | ✅ count / ⚠️ assignment: 2026-11-01 23:22, 6.3 min, 38 call-side phrases → 3 speakers (33 / 1 / 4); a speaker was created only by phrases of 4.2 and 6.7 s (and the first phrase). Right person per phrase not verified |
+| SP5 | Live Zoom call, 3 people on the call side, VAD 8 / 15 s, threshold 0.5, min_new_s 1.0 | ❌ 2026-11-01 Mac: 12 call-side phrases → 7 speakers; new speakers came from phrases of 1.2–8.4 s, four of them ≤ 2 s → VAD reverted (D2), speaker settings to tune (D4) **Fixed: see SP6.** |
+| SP6 | Live Zoom call, 3 people on the call side, with VAD 5 / 10 s, threshold 0.45, min_new_s 2.0 | ✅ 2026-11-01 23:22, 6.3 min, 38 call-side phrases → 3 speakers (33 / 1 / 4); checked by the user 2026-11-01: each of the 3 people kept one label. A speaker was created only by phrases of 4.2 and 6.7 s (and the first phrase) |
 
 ### integration (2026-11-01)
 

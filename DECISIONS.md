@@ -329,8 +329,7 @@ found 2 speakers here, 100 % in the right group, so the podcast alone does not d
 (short phrases never start or change a speaker), and a short **first** phrase no longer founds Speaker 1 (it is
 labelled 1 but the first phrase ≥ 2 s sets the fingerprint) — in the live call the 2.0 s first phrase founded a
 Speaker 1 that nothing matched again. **Live check (2026-11-01 23:22, 6.3 min, 3 people on the call side):** 38 call-side
-phrases → 3 speakers (33 / 1 / 4), latency max 4.64 s, 0 over 5 s (TESTS SP6). Not verified: which person each phrase
-really was.
+phrases → 3 speakers (33 / 1 / 4), latency max 4.64 s, 0 over 5 s (TESTS SP6); checked by the user: each of the 3 people kept one label.
 
 ## D5 — Architecture: cascade, segment-based (2026-10-23) — Tentative
 VAD → (speaker) → ASR → MT, one shared worker. Streaming ASR rejected: much more complex

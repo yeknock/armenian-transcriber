@@ -190,6 +190,10 @@ empty rating fields); the user decided after reading the outputs.
   "Call Output", mic MacBook Air Microphone, headphones (Bluetooth only for listening).
 
 ## Still open
+> Update at 23:31: the user then confirmed four checks done on the Mac — each of the 3 call-side people kept one
+> label, the whole program works with Wi-Fi off, a 10-minute call stayed under 5 s, 0 audio dropouts — and TESTS
+> R5b, R5c, SP6, R8, R7a, A10 are green. The first three items below are therefore done.
+
 - **Wi-Fi-off run of the whole program** (R8): each model passed offline alone, TitaNet and 1.3B never offline.
 - **A 10-minute run** of `main.py` (R7a): longest so far 6.3 min, max 4.64 s — close to 5 s with 1.3B; if it goes
   over, `--mt-model nllb-600m` halves the translation time.

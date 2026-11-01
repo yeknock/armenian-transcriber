@@ -47,7 +47,7 @@ full AI chat history — is part of the result; see [How this was built](#how-th
 | Capture the microphone and the system audio (the call) at the same time; user picks the devices | ✅ `--list-devices`, `--mic`, `--call` (device name or id) |
 | Armenian speech → Armenian text | ✅ NVIDIA FastConformer (CER 8.8 %, WER 26.7 % on our own spontaneous recordings) |
 | Translate every segment into English | ✅ NLLB-200 1.3B with a spoken→written Armenian word list (600M with `--mt-model nllb-600m`) |
-| Mic = `Me`; call side = `Speaker 1, 2, …`, stable for the session | ✅ `Me` always right. ⚠️ Call-side labels: tuned on a 2-voice podcast after a live call gave 7 labels for 3 people; the next 6-minute call with 3 people found 3 (whether every phrase went to the right person was not checked; see [limitations](#known-limitations)) |
+| Mic = `Me`; call side = `Speaker 1, 2, …`, stable for the session | ✅ `Me` always right. Call side: tuned on a 2-voice podcast after a live call gave 7 labels for 3 people; in the next live call with 3 people each person kept one label (see [limitations](#known-limitations)) |
 | Live terminal output: time, speaker, Armenian, English | ✅ |
 | At most 5 s from the end of a phrase to its English line | ✅ measured in live calls: 0 phrases over 5 s; the longest run with the final settings (6.3 min, 81 entries) peaked at 4.64 s |
 | Local models only, Python, runs on my own laptop | ✅ MacBook Air M1, 8 GB, macOS, Python 3.12 |
@@ -316,7 +316,7 @@ The matching rule was tuned after it failed in a live call (7 "speakers" for 3 p
 2-voice podcast, phrases of 2 s or more match their own speaker at ≥ 0.66 and the other at ≤ 0.35, while shorter
 phrases are unreliable (own-speaker similarity down to 0.04). So: **threshold 0.45**, and only phrases **≥ 2 s** may
 start or change a speaker (shorter ones take the closest label). That finds the right 2 speakers on the podcast, and
-in a 6-minute live call with 3 people on the call side it found 3 (instead of 7 before).
+in live calls with 3 people on the call side each person kept one label (7 labels for 3 people before).
 
 ---
 
@@ -346,8 +346,8 @@ with 1.3B (~3 GB with 600M).
 **Time per phrase:** ASR 0.27–0.40 s, speaker 0.18–0.25 s (median), translation 0.74 s (1.3B) / 0.37 s (600M) median.
 
 *Note:* only the first row uses the final defaults (NLLB-1.3B + word list, VAD 5 / 10 s, tuned speakers); the others
-were earlier set-ups. With 1.3B the slowest phrase came within 0.4 s of the limit (4.64 s); a 10-minute run is still
-to do (R7a).
+were earlier set-ups. With 1.3B the slowest phrase came within 0.4 s of the limit (4.64 s); a 10-minute call also stayed under
+5 s (R7a).
 
 ---
 
@@ -362,8 +362,8 @@ Honest list; most are measured, see TESTS / DECISIONS.
   while being wrong.
 - **Call-side speaker labels are tuned on one recording only.** With the first, untuned settings a live call with 3
   people on the call side gave 7 labels. The settings now come from a 2-voice podcast (right 2 speakers, every phrase
-  in the right group); a 6-minute call with 3 people on the call side then found 3 speakers, but whether every phrase
-  went to the right person was not checked.
+  in the right group); in live calls with 3 people on the call side each person then kept one label. Tested on few
+  calls and voices so far.
   Two people talking back to back with no pause can land in one phrase (one label); overlapping speech is not handled;
   a person who only ever says short phrases (< 2 s) never gets a label of their own.
 - **Short phrases:** a one-word phrase gets no new speaker (its fingerprint is weak) and joins the closest one. A real
@@ -380,8 +380,8 @@ Honest list; most are measured, see TESTS / DECISIONS.
 - **Long monologues** are cut every 5–10 s; almost half of such cuts fall while the person is still speaking, often
   mid-sentence, and NLLB translates each piece without the one before, so the English of those pieces suffers. Longer
   pieces helped the English but broke the speaker labels (D2).
-- **Not tested as a whole:** a 10-minute run of `main.py`, and the whole program with Wi-Fi off (each model was tested
-  offline on its own). The first start after an install takes 70–100 s.
+- **First start after an install** takes 70–100 s for speech recognition alone (later ~10 s, plus a few seconds for
+  the speaker and translation models).
 - **macOS only as tested**; other systems need their own loopback input.
 - **NLLB is non-commercial** (CC-BY-NC).
 
